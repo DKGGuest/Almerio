@@ -39,6 +39,18 @@ const MultiLaneLiveView = () => {
   const handleParametersUpdate = (idx, _laneId, params) => updateTarget(idx, { parameters: params });
   const handleAnalyticsUpdate = (idx, data) => setAnalytics(prev => ({ ...prev, [targets[idx].id]: data }));
 
+  const openParameterFor = (laneId) => {
+    const targetContainer = document.querySelector(`[data-lane-id="${laneId}"]`);
+    if (targetContainer) {
+      const event = new CustomEvent('openParameterForm', {
+        detail: { laneId },
+        bubbles: true,
+        cancelable: true
+      });
+      targetContainer.dispatchEvent(event);
+    }
+  };
+
   return (
     <div className="multi-target-mode" style={{ padding: 16, background: '#000000', minHeight: '100vh' }}>
       {/* Hide TargetDisplay chrome ONLY on this page */}
@@ -55,8 +67,10 @@ const MultiLaneLiveView = () => {
           margin-bottom: 0 !important;
           box-shadow: none !important;
         }
-        /* Hide everything after the target area (upload/delete/reset/params/results/etc.) */
+        /* Hide everything after the target area except modal overlays */
         .multi-target-mode .modern-target-container > div:nth-child(n+4) { display: none !important; }
+        /* Re-enable parameter/viewer modal overlays which use inline position: fixed */
+        .multi-target-mode .modern-target-container > div[style*="position: fixed"] { display: block !important; }
         /* Ensure target area itself is visible and clickable */
         .multi-target-mode .modern-target-container .modern-target-area {
           display: block !important;
@@ -117,6 +131,49 @@ const MultiLaneLiveView = () => {
         <div style={{ background: 'rgba(255,255,255,0.95)', borderRadius: 8, padding: '6px 10px' }}>
           <TargetTemplateSelector selectedTemplate={selectedTemplate} onTemplateChange={handleTemplateChange} />
         </div>
+      </div>
+
+      {/* Parameter buttons below template, one per target (same behavior as Dashboard) */}
+      <div style={{
+        display: 'flex',
+        gap: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        background: '#ffffff',
+        borderRadius: 8,
+        padding: '8px 12px',
+        margin: '0 auto 8px',
+        maxWidth: 940
+      }}>
+        {targets.map((t) => {
+          const hasParams = !!t.parameters;
+          return (
+            <button
+              key={`param-${t.id}`}
+              onClick={() => openParameterFor(t.id)}
+              style={{
+                background: hasParams
+                  ? 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)'
+                  : 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                padding: '10px 14px',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                boxShadow: hasParams
+                  ? '0 2px 6px rgba(59, 130, 246, 0.3)'
+                  : '0 2px 6px rgba(5, 150, 105, 0.3)'
+              }}
+              title={hasParams ? 'Get Shooting Parameters' : 'Set Shooting Parameters'}
+            >
+              <span style={{ marginRight: 6 }}>{hasParams ? '👁️' : '⚙️'}</span>
+              {hasParams ? 'GET PARAMETER' : 'SET PARAMETER'} ({t.id.replace('target','T')})
+            </button>
+          );
+        })}
       </div>
 
       {/* Targets grid: 3 across on white background */}
