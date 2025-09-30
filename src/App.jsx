@@ -6,8 +6,25 @@ import ProtectedRoute from './components/ProtectedRoute';
 import TargetSimulatorDemo from './components/TargetSimulatorDemo';
 import Simulator from './components/Simulator';
 import MultiLaneLiveView from './components/MultiLaneLiveView';
+import ShooterProfilePage from './components/ShooterProfilePage';
+import ShooterListPage from './components/ShooterListPage';
+import SessionDetailsPage from './components/SessionDetailsPage';
 
 import ModernNavigation from './components/ModernNavigation';
+
+// Component to conditionally render navigation
+function ConditionalNavigation({ activeLanes, onLogout }) {
+  const location = useLocation();
+
+  // Hide navigation on authentication pages
+  const hideNavigation = ['/login', '/register', '/registration'].includes(location.pathname);
+
+  if (hideNavigation) {
+    return null;
+  }
+
+  return <ModernNavigation activeLanes={activeLanes} onLogout={onLogout} />;
+}
 
 function App() {
   // ...existing code...
@@ -26,7 +43,8 @@ function App() {
       template: null,
       parameters: null,
       uploadedImage: null,
-      message: '🎯 Target Online'
+      message: '🎯 Target Online',
+      sessionId: null
     }
   });
 
@@ -49,7 +67,8 @@ function App() {
           template: null,
           parameters: null,
           uploadedImage: null,
-          message: '🎯 Target Online'
+          message: '🎯 Target Online',
+          sessionId: null
         }
       };
       console.log('[App] addLane:', newLanes);
@@ -114,14 +133,19 @@ function App() {
 
   return (
     <Router>
-      {/* Hide navbar on login route */}
-      {window.location.pathname !== '/login' && (
-        <ModernNavigation activeLanes={Object.keys(lanes).length} onLogout={handleLogout} />
-      )}
+      <ConditionalNavigation activeLanes={Object.keys(lanes).length} onLogout={handleLogout} />
       <div className="min-h-screen bg-shooter-dark">
         <Routes>
           <Route
             path="/login"
+            element={<LoginPage onLogin={handleLogin} />}
+          />
+          <Route
+            path="/register"
+            element={<LoginPage onLogin={handleLogin} />}
+          />
+          <Route
+            path="/registration"
             element={<LoginPage onLogin={handleLogin} />}
           />
           <Route
@@ -154,6 +178,38 @@ function App() {
             element={
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Simulator />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/shooter/:shooterName"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <ShooterProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/shooter-profile/:shooterId"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <ShooterProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/shooters"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <ShooterListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/session/:sessionId"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <SessionDetailsPage />
               </ProtectedRoute>
             }
           />

@@ -1,9 +1,20 @@
-import { useMemo, memo } from 'react';
+import { useMemo, memo, useRef, useEffect } from 'react';
+import { calculateZoneScore, calculateRingRadii } from '../constants/shootingParameters';
+import { getPerformanceRemark } from '../utils/performanceRemarks';
 
-const FinalReport = memo(({ shooter, hits = [], bullseye = null, template = null, laneId = null }) => {
-  // Filter out any bullseye bullets from hits array to ensure accurate shot count
-  const actualShots = hits.filter(hit => !hit.isBullseye);
-  
+const FinalReport = memo(({ shooter, hits = [], bullseye = null, template = null, laneId = null, onSaveReport = null, sessionType = null, shootingParameters = null }) => {
+  // Ref to track if report has been saved to prevent duplicates
+  const reportSavedRef = useRef(false);
+
+  // Build actual shots list
+  // If there are WINDOW-tagged shots (timed mode), include only those; otherwise include all non-bullseye shots (jumper/normal)
+  const hasWindowShots = hits.some(h => h.timePhase === 'WINDOW');
+  const actualShots = hits.filter(hit => {
+    if (hit.isBullseye) return false;
+    if (hasWindowShots) return hit.timePhase === 'WINDOW';
+    return true; // jumper/normal/no timed window
+  });
+
   // Get target center coordinates (400x400 target with center at 200,200)
   const getTargetCenter = () => {
     return { x: 200, y: 200 }; // Center of 400x400 target
@@ -49,31 +60,25 @@ const FinalReport = memo(({ shooter, hits = [], bullseye = null, template = null
     const avgDistance = distances.reduce((sum, d) => sum + d, 0) / distances.length;
     const maxDistance = Math.max(...distances);
 
-    // Calculate group size (maximum distance between any two shots)
+    // Calculate group size using industry standard extreme spread method
+    // Group Size = maximum distance between any two shots (center-to-center)
+    // This matches the shooting sports standard used by military, competitive shooting, etc.
     let groupSize = 0;
-    for (let i = 0; i < actualShots.length; i++) {
-      for (let j = i + 1; j < actualShots.length; j++) {
-        const distance = calculateDistance(actualShots[i], actualShots[j]);
-        groupSize = Math.max(groupSize, distance);
+    if (actualShots.length > 1) {
+      for (let i = 0; i < actualShots.length; i++) {
+        for (let j = i + 1; j < actualShots.length; j++) {
+          const dx = actualShots[i].x - actualShots[j].x;
+          const dy = actualShots[i].y - actualShots[j].y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          groupSize = Math.max(groupSize, distance);
+        }
       }
     }
 
-    // Template-based accuracy calculation (matches TargetDisplay)
-    let accuracy = 0;
-    if (template) {
-      // Calculate template radius in pixels
-      const targetPhysicalWidth = 133; // 13.3 cm in mm
-      const targetPixelWidth = 400; // SVG width in pixels
-      const pixelsPerMm = targetPixelWidth / targetPhysicalWidth;
-      const templateRadius = (template.diameter / 2) * pixelsPerMm;
-
-      // Standard accuracy formula: Accuracy % = (1 - Mean Distance from Reference Point / Target Radius) × 100
-      accuracy = Math.max(0, (1 - avgDistance / templateRadius) * 100);
-    } else {
-      // Fallback for no template: use 100 pixel reference
-      const referenceDistance = 100;
-      accuracy = Math.max(0, Math.min(100, (1 - (avgDistance / referenceDistance)) * 100));
-    }
+    // Score-based accuracy calculation
+    const totalScore = actualShots.reduce((sum, hit) => sum + getHitScore(hit), 0);
+    const maxPossibleScore = actualShots.length * 3; // 3 points is maximum per shot
+    const accuracy = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
 
     // Convert pixels to mm using the same scale as template calculations
     const targetPhysicalWidth = 133; // 13.3 cm in mm
@@ -90,7 +95,9 @@ const FinalReport = memo(({ shooter, hits = [], bullseye = null, template = null
       maxDistance: maxDistance * mmPerPixel, // Convert to mm
       referencePoint: referenceLabel,
       groupSize: groupSize * mmPerPixel, // Convert to mm
-      mpiCoords: trueMPI ? { x: trueMPI.x - 200, y: 200 - trueMPI.y } : null // Convert to (0,0) coordinate system
+      mpiCoords: trueMPI ? { x: trueMPI.x - 200, y: 200 - trueMPI.y } : null, // Convert to (0,0) coordinate system
+      totalScore: totalScore,
+      maxPossibleScore: maxPossibleScore
     };
   };
 
@@ -110,29 +117,16 @@ const FinalReport = memo(({ shooter, hits = [], bullseye = null, template = null
     return mpi;
   };
 
-  // Calculate score for a single hit based on distance from reference point
+  // Calculate zone-based score for a single hit
   const getHitScore = (hit) => {
-    if (!template) return 0;
-
     const referencePoint = bullseye || getTargetCenter();
-    const distance = calculateDistance(hit, referencePoint);
 
-    // Target image dimensions: 14 cm × 13.3 cm
-    // SVG viewBox: 400 × 400 pixels
-    // Use the smaller dimension (13.3 cm) to maintain aspect ratio
-    const targetPhysicalWidth = 133; // 13.3 cm in mm
-    const targetPixelWidth = 400; // SVG width in pixels
+    // Create a template object if we don't have one, using a fallback diameter
+    const effectiveTemplate = template || { diameter: 150 }; // 150mm = 50px radius fallback (consistent with TargetDisplay)
+    const esaParameter = shootingParameters?.esa || null;
+    const ringRadii = calculateRingRadii(effectiveTemplate, esaParameter);
 
-    // Calculate scale: pixels per mm
-    const pixelsPerMm = targetPixelWidth / targetPhysicalWidth;
-
-    // Convert template diameter (mm) to radius (pixels)
-    const templateRadius = (template.diameter / 2) * pixelsPerMm;
-
-    if (distance <= templateRadius * 0.3) return 10; // Inner ring
-    if (distance <= templateRadius * 0.6) return 5;  // Middle ring
-    if (distance <= templateRadius) return 1;        // Outer ring
-    return 0; // Miss
+    return calculateZoneScore(hit, referencePoint, ringRadii);
   };
 
   // Calculate total score
@@ -142,6 +136,43 @@ const FinalReport = memo(({ shooter, hits = [], bullseye = null, template = null
 
   const stats = useMemo(() => calculateMPIAndAccuracy(), [actualShots, bullseye, template]);
   const totalScore = useMemo(() => getTotalScore(), [actualShots, template, bullseye]);
+
+  const performanceRemark = useMemo(() => getPerformanceRemark(stats.accuracy, sessionType), [stats.accuracy, sessionType]);
+
+  // Auto-save report to backend if callback provided (with deduplication)
+  useEffect(() => {
+    if (!onSaveReport || !shooter || actualShots.length === 0 || reportSavedRef.current) return;
+
+    // Use the performance remark system
+    const remarkData = getPerformanceRemark(stats.accuracy, sessionType);
+    const performanceRating = remarkData.rating;
+    const performanceEmoji = remarkData.emoji;
+
+    const report = {
+      totalScore,
+      accuracyPercentage: stats.accuracy,
+      mpiDistance: stats.mpi,
+      groupSize: stats.groupSize,
+      maxDistance: stats.maxDistance,
+      avgDistance: stats.avgDistance,
+      // Already in target coordinate system (0,0 at center; +x right, +y up)
+      trueMpiX: stats.mpiCoords ? stats.mpiCoords.x : 0,
+      trueMpiY: stats.mpiCoords ? stats.mpiCoords.y : 0,
+      referencePoint: stats.referencePoint,
+      shotsAnalyzed: actualShots.length,
+      shotsFired: hits.filter(h => !h.isBullseye).length,
+      templateName: template?.name || null,
+      templateDiameter: template?.diameter || null,
+      firingMode: null,
+      targetDistance: null,
+      zeroingDistance: null,
+      performanceRating,
+      performanceEmoji
+    };
+
+    onSaveReport(report);
+    reportSavedRef.current = true; // Mark as saved to prevent duplicates
+  }, [shooter, actualShots.length, totalScore, stats.accuracy, stats.mpi, stats.groupSize, template?.name]);
 
   if (!shooter) {
     return (
@@ -268,7 +299,8 @@ const FinalReport = memo(({ shooter, hits = [], bullseye = null, template = null
         </div>
       </div>
 
-      {/* Performance Rating Badge */}
+      {/* Performance Rating Badge - Commented out for general display */}
+      {/*
       <div style={{
         textAlign: 'center',
         marginBottom: '24px'
@@ -281,19 +313,51 @@ const FinalReport = memo(({ shooter, hits = [], bullseye = null, template = null
           fontWeight: '700',
           textTransform: 'uppercase',
           letterSpacing: '0.5px',
-          background: stats.accuracy >= 90 ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)' :
-                     stats.accuracy >= 75 ? 'linear-gradient(135deg, #34d399 0%, #10b981 100%)' :
-                     stats.accuracy >= 50 ? 'linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%)' :
-                     'linear-gradient(135deg, #94a3b8 0%, #64748b 100%)',
+          background: performanceRemark.bgColor,
           color: 'white',
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)'
         }}>
-          {stats.accuracy >= 90 ? '🏆 EXPERT MARKSMAN' :
-           stats.accuracy >= 75 ? '🥇 SKILLED SHOOTER' :
-           stats.accuracy >= 50 ? '📈 IMPROVING SHOOTER' :
-           '🎯 BEGINNER LEVEL'}
+          {performanceRemark.emoji} {performanceRemark.rating}
         </div>
       </div>
+      */}
+
+      {/* Show remark explanation ONLY for TEST sessions */}
+      {sessionType === 'test' && (
+        <div style={{
+          textAlign: 'center',
+          marginBottom: '24px'
+        }}>
+          <div style={{
+            display: 'inline-block',
+            padding: '12px 24px',
+            borderRadius: '25px',
+            fontSize: '0.875rem',
+            fontWeight: '700',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+            background: performanceRemark.bgColor,
+            color: 'white',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)'
+          }}>
+            {performanceRemark.emoji} {performanceRemark.rating}
+          </div>
+          <div style={{
+            marginTop: '8px',
+            fontSize: '0.75rem',
+            color: '#64748b',
+            fontStyle: 'italic',
+            textAlign: 'center'
+          }}>
+            <div style={{ marginBottom: '4px' }}>
+              Test Session Remark: {performanceRemark.description}
+            </div>
+            <div style={{ fontSize: '0.65rem', color: '#9ca3af' }}>
+              Marksman: &gt;70% • First Class: 70%-60% • Second Class: 60%-40% • Failed: &lt;40%
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Detailed Statistics */}
       <div style={{

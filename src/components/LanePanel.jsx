@@ -339,6 +339,8 @@ const LanePanel = memo(({ laneId, lane, onUpdateLane }) => {
           hits={lane.hits}
           bullseye={lane.bullseye}
           template={lane.template}
+          shootingParameters={lane.parameters}
+          visualRingRadii={analyticsData?.visualRingRadii}
         />
       </div>
     </div>

@@ -1,8 +1,9 @@
 import { useMemo, memo } from 'react';
+import { calculateZoneScore, getZoneName, calculateRingRadii } from '../constants/shootingParameters';
 
-const ShooterStats = memo(({ shooter, hits = [], bullseye = null, template = null }) => {
-  // Filter out any bullseye bullets from hits array to ensure accurate shot count
-  const actualShots = hits.filter(hit => !hit.isBullseye);
+const ShooterStats = memo(({ shooter, hits = [], bullseye = null, template = null, title = 'Final Report', shootingParameters = null }) => {
+  // Filter out any bullseye bullets and ignore shots outside timed window
+  const actualShots = hits.filter(hit => !hit.isBullseye && (!hit.timePhase || hit.timePhase === 'WINDOW'));
   // Get target center coordinates (400x400 target with center at 200,200)
   const getTargetCenter = () => {
     return { x: 200, y: 200 }; // Center of 400x400 target
@@ -84,30 +85,24 @@ const ShooterStats = memo(({ shooter, hits = [], bullseye = null, template = nul
     const avgDistance = distances.reduce((sum, dist) => sum + dist, 0) / distances.length;
     const maxDistance = Math.max(...distances);
 
-    // Calculate group size (spread) - distances from each shot to the MPI
+    // Calculate group size using industry standard extreme spread method
+    // Group Size = maximum distance between any two shots (center-to-center)
     let groupSize = 0;
-    if (trueMPI && actualShots.length > 1) {
-      const distancesToMPI = actualShots.map(hit => calculateDistance(hit, trueMPI));
-      groupSize = Math.max(...distancesToMPI) * 2; // Diameter of the group
+    if (actualShots.length > 1) {
+      for (let i = 0; i < actualShots.length; i++) {
+        for (let j = i + 1; j < actualShots.length; j++) {
+          const dx = actualShots[i].x - actualShots[j].x;
+          const dy = actualShots[i].y - actualShots[j].y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          groupSize = Math.max(groupSize, distance);
+        }
+      }
     }
 
-    // Template-based accuracy calculation
-    let accuracy = 0;
-    if (template) {
-      // Calculate template radius in pixels
-      const targetPhysicalWidth = 133; // 13.3 cm in mm
-      const targetPixelWidth = 400; // SVG width in pixels
-      const pixelsPerMm = targetPixelWidth / targetPhysicalWidth;
-      const templateRadius = (template.diameter / 2) * pixelsPerMm;
-
-      // Accuracy based on how close shots are to target size
-      const normalizedDistance = avgDistance / templateRadius;
-      accuracy = Math.max(0, Math.min(100, (1 - normalizedDistance / 2) * 100));
-    } else {
-      // Fallback for no template: use 100 pixel reference
-      const referenceDistance = 100;
-      accuracy = Math.max(0, Math.min(100, (1 - (avgDistance / referenceDistance)) * 100));
-    }
+    // Score-based accuracy calculation
+    const totalScore = actualShots.reduce((sum, hit) => sum + getHitScore(hit), 0);
+    const maxPossibleScore = actualShots.length * 3; // 3 points is maximum per shot
+    const accuracy = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
 
     // Convert pixels to mm using the same scale as template calculations
     const targetPhysicalWidth = 133; // 13.3 cm in mm
@@ -123,33 +118,21 @@ const ShooterStats = memo(({ shooter, hits = [], bullseye = null, template = nul
       avgDistance: avgDistance,
       maxDistance: maxDistance,
       referencePoint: referenceLabel,
-      groupSize: groupSize * mmPerPixel // Convert to mm
+      groupSize: groupSize * mmPerPixel, // Convert to mm
+      totalScore: totalScore,
+      maxPossibleScore: maxPossibleScore
     };
   };
 
-  // Calculate score for a single hit based on distance from reference point
+  // Calculate zone-based score for a single hit
   const getHitScore = (hit) => {
     if (!template) return 0;
 
     const referencePoint = bullseye || getTargetCenter();
-    const distance = calculateDistance(hit, referencePoint);
+    const esaParameter = shootingParameters?.esa || null;
+    const ringRadii = calculateRingRadii(template, esaParameter);
 
-    // Target image dimensions: 14 cm × 13.3 cm
-    // SVG viewBox: 400 × 400 pixels
-    // Use the smaller dimension (13.3 cm) to maintain aspect ratio
-    const targetPhysicalWidth = 133; // 13.3 cm in mm
-    const targetPixelWidth = 400; // SVG width in pixels
-
-    // Calculate scale: pixels per mm
-    const pixelsPerMm = targetPixelWidth / targetPhysicalWidth;
-
-    // Convert template diameter (mm) to radius (pixels)
-    const templateRadius = (template.diameter / 2) * pixelsPerMm;
-
-    if (distance <= templateRadius * 0.3) return 10; // Inner ring
-    if (distance <= templateRadius * 0.6) return 5;  // Middle ring
-    if (distance <= templateRadius) return 1;        // Outer ring
-    return 0; // Miss
+    return calculateZoneScore(hit, referencePoint, ringRadii);
   };
 
   // Calculate total score
@@ -173,10 +156,10 @@ const ShooterStats = memo(({ shooter, hits = [], bullseye = null, template = nul
 
   return (
     <div className="card">
-      {/* Final Report Centered at Top */}
+      {/* Title */}
       <div className="mb-4 text-center">
         <h4 className="text-lg font-semibold text-shooter-accent">
-          📊 Final Report
+          📊 {title}
         </h4>
       </div>
 

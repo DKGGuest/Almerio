@@ -1,52 +1,68 @@
-const TARGET_TEMPLATES = [
+export const TARGET_TEMPLATES = [
   {
     id: 'air-pistol-10m',
-    name: '10m Air Pistol (Individual)',
-    diameter: 11.5,
+    name: '10m',
+    diameter: 130,
     distance: '10m',
     caliber: '4.5mm air pistol',
     description: 'Standard 10-ring target for air pistol competition'
   },
   {
     id: 'pistol-25m-precision',
-    name: '25m Pistol Precision',
-    diameter: 50,
+    name: '25m',
+    diameter: 120,
     distance: '25m',
     caliber: '.22 LR rimfire',
     description: 'Precision pistol target for 25m competition'
   },
   {
     id: 'pistol-25m-rapid',
-    name: '25m Rapid Fire Pistol',
-    diameter: 50,
-    distance: '25m',
+    name: '50m',
+    diameter: 110,
+    distance: '50m',
     caliber: '.22 Short',
     description: 'Rapid fire pistol target'
   },
   {
     id: 'rifle-50m',
-    name: '50m Rifle Prone',
-    diameter: 10.4,
-    distance: '50m',
+    name: '100m',
+    diameter: 100,
+    distance: '100m',
     caliber: '.22 LR',
-    description: 'Small bore rifle target'
+    description: 'Small bore rifle target for 50m'
   },
+  // {
+  //   id: 'rifle-100m',
+  //   name: '200m',
+  //   diameter: 90,
+  //   distance: '200m',
+  //   caliber: '.22 LR',
+  //   description: 'Standard rifle target for 100m'
+  // },
   {
     id: 'air-rifle-10m',
-    name: '10m Air Rifle',
-    diameter: 0.5,
-    distance: '10m',
-    caliber: '4.5mm air rifle',
-    description: 'Precision air rifle target'
+    name: '200m',
+    diameter: 90,
+    distance: '200m',
+    caliber: '7.62mm',
+    description: 'Long range rifle target for 200m'
   },
   {
     id: 'custom',
-    name: 'Custom Target',
-    diameter: 30,
+    name: '300m',
+    diameter: 80,
     distance: 'Variable',
     caliber: 'Various',
     description: 'Custom target configuration'
-  }
+  },
+  // {
+  //   id: 'custom 1',
+  //   name: 'Custom Target 1',
+  //   diameter: 30,
+  //   distance: '50m',
+  //   caliber: 'Various',
+  //   description: 'Custom target configuration'
+  // }
 ];
 
 const TargetTemplateSelector = ({ selectedTemplate, onTemplateChange, disabled = false, compact = false, isMobile = false }) => {
@@ -108,7 +124,7 @@ const TargetTemplateSelector = ({ selectedTemplate, onTemplateChange, disabled =
             className="select-field-compact"
             disabled={disabled}
           >
-            <option value="">Select template...</option>
+            <option value="">Select Target Template...</option>
             {TARGET_TEMPLATES.map(template => (
               <option key={template.id} value={template.id}>
                 {template.name} - {template.diameter}mm @ {template.distance}

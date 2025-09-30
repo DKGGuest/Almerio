@@ -67,6 +67,33 @@ body {
   overflow-x: hidden;
 }
 
+/* App-wide dark, modern page shell that works with Tailwind content */
+.modern-page {
+  min-height: 100vh;
+  background: radial-gradient(1200px 800px at 20% -10%, rgba(59,130,246,0.15), transparent 60%),
+              radial-gradient(1000px 700px at 120% 10%, rgba(168,85,247,0.12), transparent 60%),
+              linear-gradient(180deg, #0b1120 0%, #0f172a 60%, #111827 100%);
+  color: #e5e7eb;
+}
+
+.modern-page .card-dark { background: rgba(17,24,39,0.9); border: 1px solid rgba(75,85,99,0.5); border-radius: 14px; }
+.modern-page .table-dark { background: rgba(2,6,23,0.6); border: 1px solid rgba(30,41,59,0.7); border-radius: 12px; }
+.modern-page .table-dark thead { background: rgba(15,23,42,0.8); }
+
+/* Elevated button look for back buttons */
+.btn-glass {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.9);
+  border: 1px solid rgba(255,255,255,0.15);
+  backdrop-filter: saturate(140%) blur(6px);
+  -webkit-backdrop-filter: saturate(140%) blur(6px);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.25);
+  transition: transform .2s ease, background .2s ease, box-shadow .2s ease;
+}
+.btn-glass:hover { transform: translateY(-1px); background: rgba(255,255,255,0.14); box-shadow: 0 10px 18px rgba(0,0,0,0.35); }
+.btn-glass:active { transform: translateY(0); }
+
+
 /* Optimized Button Styles */
 .btn-primary {
   background: #3b82f6;
@@ -1051,7 +1078,7 @@ body {
   position: absolute;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  z-index: 15;
+  z-index: 50; /* Highest z-index - always visible on top */
 }
 
 .mpi-cross-h {
@@ -1308,6 +1335,19 @@ body {
   }
   50% {
     opacity: 1;
+  }
+}
+
+@keyframes esaRingPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(1.03);
+    box-shadow: 0 0 18px rgba(59, 130, 246, 0.8);
   }
 }
 
@@ -1730,6 +1770,77 @@ body {
   margin-left: auto;
   margin-right: auto;
 }
+
+/* --- Minimal utility extensions to support updated UI --- */
+.rounded-xl { border-radius: 12px; }
+.rounded-2xl { border-radius: 16px; }
+.rounded-full { border-radius: 9999px; }
+
+.bg-white { background-color: #ffffff; }
+.bg-slate-50 { background-color: #f8fafc; }
+.bg-slate-100 { background-color: #f1f5f9; }
+
+.text-gray-700 { color: #374151; }
+.text-gray-900 { color: #111827; }
+
+.border-gray-200 { border-color: #e5e7eb; }
+
+.shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+.shadow-md { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+
+/* spacing helpers used in updated components */
+.px-5 { padding-left: 20px; padding-right: 20px; }
+.pl-11 { padding-left: 44px; }
+.pr-12 { padding-right: 48px; }
+
+
+/* Light boxed containers to make borders/backgrounds clearly visible */
+.boxed-light {
+  background-color: #f8fafc; /* slate-50 */
+  border: 2px solid #d1d5db; /* gray-300 */
+  border-radius: 16px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+  overflow: hidden;
+
+/* UI color helper classes to ensure visible backgrounds without Tailwind */
+.ui-card { border-radius: 16px; box-shadow: 0 6px 14px rgba(0,0,0,0.08); }
+.ui-blue { background-color: #dbeafe; /* blue-200 */ border: 2px solid #60a5fa; /* blue-400 */ }
+.ui-green { background-color: #bbf7d0; /* green-200 */ border: 2px solid #34d399; /* green-400 */ }
+.ui-pink { background-color: #fbcfe8; /* pink-200 */ border: 2px solid #f472b6; /* pink-400 */ }
+
+/* Table header color helpers */
+.table-header-blue { background-color: #93c5fd; /* blue-300 */ }
+.table-header-green { background-color: #86efac; /* green-300 */ }
+.table-header-pink { background-color: #f9a8d4; /* pink-300 */ }
+
+/* Forcefully visible button text against gradients */
+.btn-visible-text { color: #ffffff !important; font-weight: 800 !important; text-shadow: 0 1px 2px rgba(0,0,0,0.35); font-size: 18px; }
+@media (min-width: 768px) { .btn-visible-text { font-size: 19px; } }
+
+/* Extra safe gradient button text visibility (fallback) */
+.btn-visible-text strong, .btn-visible-text { color: #ffffff !important; -webkit-text-stroke: 0.2px rgba(0,0,0,0.2); }
+
+/* High-contrast variants */
+.btn-text-white { color:#ffffff !important; font-weight:900 !important; text-shadow:0 1px 2px rgba(0,0,0,.45); font-size:20px !important; }
+.btn-text-black { color:#0b1220 !important; font-weight:900 !important; text-shadow:0 1px 0 rgba(255,255,255,.35); font-size:20px !important; }
+
+
+
+
+}
+
+.tile-light {
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb; /* gray-200 */
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+
+.thead-light {
+  background-color: #f1f5f9; /* slate-100 */
+}
+.thead-light th { color: #374151; /* gray-700 */ font-weight: 600; }
+
 
 /* Utilities */
 .w-full {

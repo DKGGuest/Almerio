@@ -1,13 +1,32 @@
 import { useMemo, memo } from 'react';
+import { calculateZoneScore, getZoneName, calculateRingRadii } from '../constants/shootingParameters';
 
-const ShotBreakdown = memo(({ shooter, hits = [], bullseye = null, template = null, laneId = null }) => {
-  // Filter out any bullseye bullets from hits array to ensure accurate shot count
-  const actualShots = hits.filter(hit => !hit.isBullseye);
-  
-  // Get target center coordinates (298x298 target with center at 149,149)
-  const getTargetCenter = () => {
-    return { x: 149, y: 149 }; // Center of 298x298 target
-  };
+const ShotBreakdown = memo(({ shooter, hits = [], bullseye = null, template = null, laneId = null, shootingParameters = null, visualRingRadii = null }) => {
+  // Filter out bullseye. If any timed WINDOW shots exist, include only WINDOW shots; otherwise include all non-bullseye shots (jumper/snap)
+  const hasWindowShots = hits.some(h => h.timePhase === 'WINDOW');
+  const actualShots = hits.filter(hit => {
+    if (hit.isBullseye) return false;
+    if (hasWindowShots) return hit.timePhase === 'WINDOW';
+    return true; // include jumper/snap/untimed
+  });
+
+  // Debug logging for TIMED mode shot filtering
+  const isDebugMode = window.location.search.includes('debug=true');
+  if (isDebugMode && shootingParameters?.firingMode === 'timed') {
+    console.log('🎯 ShotBreakdown TIMED Debug:', {
+      totalHits: hits.length,
+      hasWindowShots,
+      actualShots: actualShots.length,
+      hitPhases: hits.map(h => ({ id: h.id, timePhase: h.timePhase, isBullseye: h.isBullseye })),
+      firingMode: shootingParameters?.firingMode
+    });
+  }
+
+  // Work in the same 400x400 coordinate space used everywhere else
+  const TARGET_PX = 400;
+
+  // Get target center coordinates (400x400 target with center at 200,200)
+  const getTargetCenter = () => ({ x: TARGET_PX / 2, y: TARGET_PX / 2 });
 
   // Calculate distance between two points
   const calculateDistance = (point1, point2) => {
@@ -16,46 +35,45 @@ const ShotBreakdown = memo(({ shooter, hits = [], bullseye = null, template = nu
     return Math.sqrt(dx * dx + dy * dy);
   };
 
-  // Calculate score for a single hit based on distance from reference point
+  // Calculate zone-based score for a single hit
   const getHitScore = (hit) => {
-    // Allow scoring even if template or bullseye is missing by using sensible fallbacks
-    const targetPhysicalWidth = 133; // 13.3 cm in mm (smaller side)
-    const targetPixelWidth = 298;    // Current SVG width in pixels used by breakdown visuals
-    const pixelsPerMm = targetPixelWidth / targetPhysicalWidth;
+    // ALWAYS recalculate score to ensure consistency with current template and parameters
+    // This fixes the TIMED mode scoring issue where pre-calculated scores from the database
+    // were inconsistent with the visual ring radii used during shooting
 
-    // Reference: use chosen bullseye if available, otherwise target center
+    // Compute zone-based score using current template and parameters
     const referencePoint = bullseye || getTargetCenter();
-    const distance = calculateDistance(hit, referencePoint);
 
-    // Determine a working radius for scoring rings
-    // If a template is provided, use its physical diameter -> px radius.
-    // Otherwise, fall back to the visible target radius so default bullseye works.
-    const templateRadius = (template && template.diameter)
-      ? (template.diameter / 2) * pixelsPerMm
-      : (targetPixelWidth / 2) - 2; // approx visual radius used in the SVG
+    // Use visual ring radii if provided (from TargetDisplay), otherwise calculate
+    let ringRadii;
+    if (visualRingRadii) {
+      // Use the exact same ring radii as the visual display
+      ringRadii = visualRingRadii;
+    } else {
+      // Fallback to calculated ring radii
+      const effectiveTemplate = template || { diameter: 150 }; // 150mm = 50px radius fallback (consistent with TargetDisplay)
+      const esaParameter = shootingParameters?.esa || null;
+      ringRadii = calculateRingRadii(effectiveTemplate, esaParameter);
+    }
 
-    // Debug logging
-    console.log('Scoring debug (fallback-aware):', {
-      hit,
-      bullseye,
-      usedCenterFallback: !bullseye,
-      usedTemplateFallback: !(template && template.diameter),
-      distance,
-      templateRadius,
-      templateDiameter: template?.diameter,
-      pixelsPerMm,
-      rings: {
-        inner: templateRadius * 0.3,
-        middle: templateRadius * 0.6,
-        outer: templateRadius
-      }
-    });
+    // Debug logging for TIMED mode reference point and ring radii
+    if (isDebugMode && shootingParameters?.firingMode === 'timed') {
+      console.log('🎯 Scoring Reference Point:', {
+        bullseye,
+        referencePoint,
+        targetCenter: getTargetCenter(),
+        template: template ? { name: template.name, diameter: template.diameter } : 'none',
+        esaParameter: shootingParameters?.esa,
+        ringRadii: {
+          green: ringRadii.greenBullseyeRadius?.toFixed(1),
+          orange: ringRadii.orangeESARadius?.toFixed(1),
+          blue: ringRadii.blueInnerRadius?.toFixed(1)
+        },
+        usingVisualRingRadii: !!visualRingRadii
+      });
+    }
 
-    // Scoring rings based on template (or fallback) radius
-    if (distance <= templateRadius * 0.3) return 10; // Inner ring (30% of template radius)
-    if (distance <= templateRadius * 0.6) return 5;  // Middle ring (60% of template radius)
-    if (distance <= templateRadius) return 1;        // Outer ring (full template radius)
-    return 0; // Miss
+    return calculateZoneScore(hit, referencePoint, ringRadii);
   };
 
   // Calculate total score
@@ -64,6 +82,31 @@ const ShotBreakdown = memo(({ shooter, hits = [], bullseye = null, template = nu
   };
 
   const totalScore = useMemo(() => getTotalScore(), [actualShots, template, bullseye]);
+
+  // Calculate zone breakdown for display
+  const zoneBreakdown = useMemo(() => {
+    const breakdown = { 3: 0, 2: 0, 1: 0, 0: 0 };
+    actualShots.forEach((hit, index) => {
+      const score = getHitScore(hit);
+      breakdown[score]++;
+
+      // Debug logging for TIMED mode scoring
+      if (isDebugMode && shootingParameters?.firingMode === 'timed') {
+        console.log(`🎯 Shot #${index + 1} Score:`, {
+          hit: { x: hit.x, y: hit.y, timePhase: hit.timePhase },
+          score,
+          bullseye,
+          template: template?.name || 'default'
+        });
+      }
+    });
+
+    if (isDebugMode && shootingParameters?.firingMode === 'timed') {
+      console.log('🎯 Zone Breakdown:', breakdown);
+    }
+
+    return breakdown;
+  }, [actualShots, template, bullseye, isDebugMode, shootingParameters]);
 
   return (
     <div style={{
@@ -100,6 +143,21 @@ const ShotBreakdown = memo(({ shooter, hits = [], bullseye = null, template = nu
             color: '#059669'
           }}>
             Total Score: {totalScore}{!template ? ' (default scale)' : ''}
+          </div>
+        )}
+        {(actualShots.length > 0) && (
+          <div style={{
+            fontSize: '0.75rem',
+            color: '#6b7280',
+            marginTop: '4px',
+            display: 'flex',
+            gap: '12px',
+            flexWrap: 'wrap'
+          }}>
+            <span>🔵 Blue Zone (3pts): {zoneBreakdown[3]}</span>
+            <span>🟠 Orange Zone (2pts): {zoneBreakdown[2]}</span>
+            <span>🟢 Green Zone (1pt): {zoneBreakdown[1]}</span>
+            <span>⚪ Outside (0pts): {zoneBreakdown[0]}</span>
           </div>
         )}
       </div>
@@ -151,14 +209,15 @@ const ShotBreakdown = memo(({ shooter, hits = [], bullseye = null, template = nu
           }}>
             {actualShots.map((hit, index) => {
               const score = getHitScore(hit);
+              const zoneName = getZoneName(score);
               return (
                 <div
                   key={index}
                   style={{
-                    background: score === 10 ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' :
-                               score === 5 ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' :
-                               score === 1 ? 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)' :
-                               'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                    background: score === 3 ? 'linear-gradient(135deg, #0066ff 0%, #0052cc 100%)' : // Blue inner circle
+                               score === 2 ? 'linear-gradient(135deg, #ff6600 0%, #cc5200 100%)' : // Orange ESA zone
+                               score === 1 ? 'linear-gradient(135deg, #00ff00 0%, #00cc00 100%)' : // Green bullseye zone
+                               'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', // Outside target
                     color: 'white',
                     borderRadius: '8px',
                     padding: '12px',
@@ -179,6 +238,13 @@ const ShotBreakdown = memo(({ shooter, hits = [], bullseye = null, template = nu
                     fontWeight: '800'
                   }}>
                     {score}
+                  </div>
+                  <div style={{
+                    fontSize: '0.625rem',
+                    opacity: 0.8,
+                    marginTop: '2px'
+                  }}>
+                    {score === 3 ? '🔵' : score === 2 ? '🟠' : score === 1 ? '🟢' : '⚪'}
                   </div>
                 </div>
               );

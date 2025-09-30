@@ -1,61 +1,314 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import TargetDisplay from './TargetDisplay';
 import ShotBreakdown from './ShotBreakdown';
 import FinalReport from './FinalReport';
-import TargetTemplateSelector from './TargetTemplateSelector';
+import { TARGET_TEMPLATES } from './TargetTemplateSelector';
+import { calculateZoneScore, calculateRingRadii } from '../constants/shootingParameters';
 // import ModernNavigation from './ModernNavigation';
 
-// Shooter Assignment Form Component - Compact
-const ShooterAssignmentForm = ({ onAssign, isMobile = false }) => {
+// Shooter Assignment Form Component - Enhanced with Duplicate Detection
+const ShooterAssignmentForm = ({ onAssign, currentShooter, isMobile = false, shooterSessionCount = 0, lanes, activeLaneId, navigateToProfile }) => {
   const [shooterName, setShooterName] = useState('');
+  const [availableShooters, setAvailableShooters] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedShooterId, setSelectedShooterId] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = () => {
+  // Fetch shooters when typing
+  const handleShooterNameChange = async (value) => {
+    setShooterName(value);
+    setSelectedShooterId(null);
+
+    if (value.trim().length >= 2) {
+      try {
+        const { listShooters } = await import('../services/api');
+        const allShooters = await listShooters();
+        const matchingShooters = allShooters.filter(shooter =>
+          shooter.shooter_name.toLowerCase().includes(value.toLowerCase())
+        );
+        setAvailableShooters(matchingShooters);
+        setShowDropdown(true); // Always show dropdown when typing (for "Create New Shooter" option)
+      } catch (error) {
+        console.warn('Failed to fetch shooters:', error);
+        setAvailableShooters([]);
+        setShowDropdown(false);
+      }
+    } else {
+      setAvailableShooters([]);
+      setShowDropdown(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (submitting) return;
     if (shooterName.trim()) {
-      onAssign(shooterName.trim());
+      try {
+        setSubmitting(true);
+        // Pass both name and ID if a specific shooter was selected
+        await onAssign(shooterName.trim(), selectedShooterId);
+      } finally {
+        setSubmitting(false);
+      }
       setShooterName('');
+      setSelectedShooterId(null);
+      setShowDropdown(false);
+    }
+  };
+
+  const selectShooter = (shooter) => {
+    setShooterName(shooter.shooter_name);
+    setSelectedShooterId(shooter.id);
+    setShowDropdown(false);
+  };
+
+  const createNewShooter = async () => {
+    setSelectedShooterId('NEW'); // Special flag for new shooter
+    setShowDropdown(false);
+
+    // Automatically submit the assignment for new shooter
+    if (shooterName.trim() && !submitting) {
+      try {
+        setSubmitting(true);
+        await onAssign(shooterName.trim(), 'NEW');
+      } finally {
+        setSubmitting(false);
+      }
+      setShooterName('');
+      setSelectedShooterId(null);
     }
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      gap: isMobile ? '4px' : '6px',
-      alignItems: 'center',
-      flex: 1
-    }}>
-      <input
-        type="text"
-        value={shooterName}
-        onChange={(e) => setShooterName(e.target.value)}
-        placeholder={isMobile ? "Shooter name" : "Enter shooter name"}
-        style={{
-          padding: isMobile ? '4px 6px' : '6px 8px',
-          border: '1px solid #e5e7eb',
-          borderRadius: '4px',
-          fontSize: isMobile ? '11px' : '12px',
-          background: 'white',
-          flex: 1,
-          minWidth: 0
-        }}
-        onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-      />
-      <button
-        onClick={handleSubmit}
-        disabled={!shooterName.trim()}
-        style={{
-          background: !shooterName.trim() ? '#9ca3af' : 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-          color: 'white',
-          padding: isMobile ? '4px 8px' : '6px 10px',
-          fontSize: isMobile ? '10px' : '11px',
-          fontWeight: '600',
-          borderRadius: '4px',
-          border: 'none',
-          cursor: !shooterName.trim() ? 'not-allowed' : 'pointer',
-          whiteSpace: 'nowrap'
-        }}
-      >
-        ASSIGN
-      </button>
+    <div style={{ position: 'relative', flex: 1 }}>
+      <div style={{
+        display: 'flex',
+        gap: isMobile ? '4px' : '6px',
+        alignItems: 'center',
+        flex: 1
+      }}>
+        <input
+          type="text"
+          value={shooterName}
+          onChange={(e) => handleShooterNameChange(e.target.value)}
+          placeholder={isMobile ? "Shooter name" : "Enter shooter name"}
+          style={{
+            padding: isMobile ? '4px 6px' : '6px 8px',
+            border: '1px solid #e5e7eb',
+            borderRadius: '4px',
+            fontSize: isMobile ? '11px' : '12px',
+            background: 'white',
+            flex: 1,
+            minWidth: 0
+          }}
+          onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+          onFocus={() => shooterName.length >= 2 && setShowDropdown(true)}
+          onBlur={() => setTimeout(() => setShowDropdown(false), 300)}
+        />
+        {selectedShooterId && selectedShooterId !== 'NEW' && (
+          <span style={{
+            fontSize: isMobile ? '8px' : '9px',
+            color: '#3b82f6',
+            fontWeight: '600',
+            padding: '2px 4px',
+            backgroundColor: '#eff6ff',
+            borderRadius: '3px'
+          }}>
+            #{selectedShooterId}
+          </span>
+        )}
+        {selectedShooterId === 'NEW' && (
+          <span style={{
+            fontSize: isMobile ? '9px' : '10px',
+            color: '#ffffff',
+            fontWeight: '700',
+            padding: '3px 6px',
+            backgroundColor: '#10b981',
+            borderRadius: '4px',
+            boxShadow: '0 1px 3px rgba(16, 185, 129, 0.3)'
+          }}>
+            ✨ NEW SHOOTER
+          </span>
+        )}
+        <button
+          onClick={handleSubmit}
+          disabled={!shooterName.trim() || submitting}
+          style={{
+            background: (!shooterName.trim() || submitting) ? '#9ca3af' :
+                       selectedShooterId === 'NEW' ? 'linear-gradient(135deg, #10b981 0%, #047857 100%)' :
+                       'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+            color: 'white',
+            padding: isMobile ? '4px 8px' : '6px 10px',
+            fontSize: isMobile ? '10px' : '11px',
+            fontWeight: '600',
+            borderRadius: '4px',
+            border: 'none',
+            cursor: !shooterName.trim() ? 'not-allowed' : 'pointer',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          {submitting ? 'Creating...' : selectedShooterId === 'NEW' ? 'CREATE NEW' : 'ASSIGN'}
+        </button>
+      </div>
+
+      {/* Dropdown for shooters and new shooter option */}
+      {showDropdown && (
+        <div
+          onMouseDown={(e) => e.preventDefault()} // Prevent blur event when clicking dropdown
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            backgroundColor: 'white',
+            border: '1px solid #e5e7eb',
+            borderRadius: '6px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            zIndex: 1000,
+            maxHeight: '200px',
+            overflowY: 'auto'
+          }}>
+          {/* Create New Shooter Option - PROMINENT */}
+          <div
+            onClick={createNewShooter}
+            style={{
+              padding: '12px 16px',
+              cursor: 'pointer',
+              borderBottom: '3px solid #10b981',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#ecfdf5',
+              color: '#047857',
+              border: '2px solid #10b981',
+              borderRadius: '6px 6px 0 0',
+              fontWeight: '700'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#d1fae5';
+              e.target.style.transform = 'scale(1.02)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = '#ecfdf5';
+              e.target.style.transform = 'scale(1)';
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: '700', fontSize: '13px', color: '#047857' }}>✨ Create New Shooter "{shooterName}"</div>
+              <div style={{ fontSize: '11px', color: '#059669', fontWeight: '500' }}>
+                Start fresh with a completely new shooter profile
+              </div>
+            </div>
+            <div style={{
+              fontSize: '12px',
+              fontWeight: '700',
+              color: '#ffffff',
+              backgroundColor: '#10b981',
+              padding: '4px 8px',
+              borderRadius: '6px',
+              boxShadow: '0 2px 4px rgba(16, 185, 129, 0.3)'
+            }}>
+              ✨ NEW
+            </div>
+          </div>
+
+          {/* Existing Shooters */}
+          {availableShooters.map((shooter) => {
+            const duplicateCount = availableShooters.filter(s => s.shooter_name === shooter.shooter_name).length;
+            return (
+              <div
+                key={shooter.id}
+                onClick={() => selectShooter(shooter)}
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  borderBottom: '1px solid #f3f4f6',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}
+                onMouseEnter={(e) => { e.target.style.backgroundColor = '#f8fafc'; }}
+                onMouseLeave={(e) => { e.target.style.backgroundColor = 'white'; }}
+              >
+                <div>
+                  <div style={{ fontWeight: '600', fontSize: '12px' }}>{shooter.shooter_name}</div>
+                  <div style={{ fontSize: '10px', color: '#64748b' }}>
+                    {shooter.total_sessions || 0} sessions • {shooter.skill_level || 'beginner'}
+                    {duplicateCount > 1 && <span style={{ color: '#f59e0b' }}> • Duplicate</span>}
+                  </div>
+                </div>
+                <div style={{
+                  fontSize: '10px',
+                  fontWeight: '600',
+                  color: '#3b82f6',
+                  backgroundColor: '#eff6ff',
+                  padding: '2px 6px',
+                  borderRadius: '4px'
+                }}>
+                  #{shooter.id}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Session Count and Profile Button */}
+      {currentShooter && (
+        <>
+          {/* Session Count Display */}
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+              color: 'white',
+              padding: isMobile ? '4px 8px' : '6px 10px',
+              fontSize: isMobile ? '10px' : '11px',
+              fontWeight: '600',
+              borderRadius: '4px',
+              border: 'none',
+              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+            title={`${currentShooter} has completed ${shooterSessionCount} session(s)`}
+          >
+            🔢 {shooterSessionCount}
+          </div>
+
+          {/* View Profile Button */}
+          <button
+            onClick={() => {
+              if (lanes && activeLaneId) {
+                const activeLane = lanes[activeLaneId];
+                if (activeLane?.shooterId) {
+                  navigateToProfile(`/shooter-profile/${activeLane.shooterId}`);
+                } else {
+                  // Fallback to name-based route for legacy data
+                  navigateToProfile(`/shooter/${encodeURIComponent(currentShooter)}`);
+                }
+              } else {
+                // Fallback when props are not available
+                navigateToProfile(`/shooter/${encodeURIComponent(currentShooter)}`);
+              }
+            }}
+            style={{
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              color: 'white',
+              padding: isMobile ? '4px 8px' : '6px 10px',
+              fontSize: isMobile ? '10px' : '11px',
+              fontWeight: '600',
+              borderRadius: '4px',
+              border: 'none',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
+            }}
+            title={`View ${currentShooter}'s profile`}
+          >
+            📊 PROFILE
+          </button>
+        </>
+      )}
     </div>
   );
 };
@@ -64,6 +317,32 @@ const ShooterAssignmentForm = ({ onAssign, isMobile = false }) => {
 const PerformanceAnalyticsTab = ({ analyticsData, activeLane, laneId = null, isMobile = false, isTablet = false }) => {
   // Consider data available whenever we have any analyzed bullets or a finished session
   const hasData = !!(analyticsData && (analyticsData.showResults || analyticsData.shootingPhase === 'DONE'));
+
+  // Calculate corrected accuracy using score-based method (same as Final Report)
+  const getCorrectedAccuracy = () => {
+    if (!analyticsData?.bullets || !activeLane) return 0;
+
+    const bulletsOnly = analyticsData.bullets.filter(b => !b.isBullseye);
+    if (bulletsOnly.length === 0) return 0;
+
+    const tmpl = activeLane?.template || null;
+    const refPoint = analyticsData?.bullseye ? { x: analyticsData.bullseye.x, y: analyticsData.bullseye.y } : { x: 200, y: 200 };
+
+    const getHitScore = (hit) => {
+      // Create a template object if we don't have one, using a fallback diameter
+      const effectiveTemplate = tmpl || { diameter: 150 }; // 150mm = 50px radius fallback (consistent with TargetDisplay)
+      const esaParameter = activeLane.parameters?.esa || null;
+      const ringRadii = calculateRingRadii(effectiveTemplate, esaParameter);
+      return calculateZoneScore(hit, refPoint, ringRadii);
+    };
+
+    // Score-based accuracy calculation (same as Final Report)
+    const totalScore = bulletsOnly.reduce((sum, hit) => sum + getHitScore(hit), 0);
+    const maxPossibleScore = bulletsOnly.length * 3; // 3 points is maximum per shot
+    return maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
+  };
+
+  const correctedAccuracy = getCorrectedAccuracy();
 
   return (
     <div style={{
@@ -149,7 +428,7 @@ const PerformanceAnalyticsTab = ({ analyticsData, activeLane, laneId = null, isM
                 fontSize: isMobile ? '1.25rem' : '1.5rem',
                 fontWeight: '800'
               }}>
-                {analyticsData.stats.accuracy.toFixed(1)}
+                {correctedAccuracy.toFixed(1)}
               </div>
               <div style={{
                 color: '#059669',
@@ -264,12 +543,15 @@ const PerformanceAnalyticsTab = ({ analyticsData, activeLane, laneId = null, isM
 };
 
 const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) => {
+  const navigate = useNavigate();
   // Track the currently active lane
   const [activeLaneId, setActiveLaneId] = useState('lane1');
   // Track active tab in the right panel
   const [activeTab, setActiveTab] = useState('analytics');
   // Track analytics data for the active lane
   const [analyticsData, setAnalyticsData] = useState({});
+  // Track last auto-saved final report signature per session to avoid duplicate writes
+  const finalReportSigRef = useRef({});
   // Track screen size for responsive design
   const [screenSize, setScreenSize] = useState({
     width: window.innerWidth,
@@ -277,10 +559,28 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
     isTablet: window.innerWidth > 768 && window.innerWidth <= 1024,
     isDesktop: window.innerWidth > 1024
   });
+  // Track shooter session counts
+  const [shooterSessionCounts, setShooterSessionCounts] = useState({});
 
   useEffect(() => {
     console.log('[AdminDashboard] lanes prop changed:', lanes);
   }, [lanes]);
+
+  // Fetch session count for current shooter when lane changes
+  useEffect(() => {
+    const fetchCurrentShooterSessionCount = async () => {
+      const activeLane = lanes[activeLaneId];
+      if (activeLane?.shooter && !shooterSessionCounts[activeLane.shooter]) {
+        const sessionCount = await fetchShooterSessionCount(activeLane.shooter);
+        setShooterSessionCounts(prev => ({
+          ...prev,
+          [activeLane.shooter]: sessionCount
+        }));
+      }
+    };
+
+    fetchCurrentShooterSessionCount();
+  }, [activeLaneId, lanes, shooterSessionCounts]);
 
   useEffect(() => {
     console.log('[AdminDashboard] activeLaneId changed:', activeLaneId);
@@ -322,68 +622,312 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
   // updateLane is now from props
 
   // Handle analytics data updates
-  const handleAnalyticsUpdate = useCallback((data) => {
-    setAnalyticsData(prev => ({
-      ...prev,
-      [activeLaneId]: data
-    }));
-  }, [activeLaneId]);
+  const handleAnalyticsUpdate = useCallback(async (data) => {
+    setAnalyticsData(prev => ({ ...prev, [activeLaneId]: data }));
+
+    // Persist calculated analytics when showResults is true or phase DONE
+    try {
+      const lane = lanes[activeLaneId];
+      if (!lane?.sessionId) return;
+
+      const { saveAnalytics, saveFinalReport } = await import('../services/api');
+      const stats = data?.stats || {};
+      const reference = stats.referenceCoords || { x: 200, y: 200 };
+      const mpi = stats.mpiCoords || null;
+
+      // Calculate accuracy using score-based method (same as Final Report) FIRST
+      const bulletsOnly = (data?.bullets || []).filter(b => !b.isBullseye);
+      const tmpl = lanes[activeLaneId]?.template || null;
+      const refPoint = data?.bullseye ? { x: data.bullseye.x, y: data.bullseye.y } : { x: 200, y: 200 };
+
+      const getHitScore = (hit) => {
+        // Create a template object if we don't have one, using a fallback diameter
+        const effectiveTemplate = tmpl || { diameter: 150 }; // 150mm = 50px radius fallback (consistent with TargetDisplay)
+        const esaParameter = lane.parameters?.esa || null;
+        const ringRadii = calculateRingRadii(effectiveTemplate, esaParameter);
+        return calculateZoneScore(hit, refPoint, ringRadii);
+      };
+
+      // Score-based accuracy calculation (same as Final Report)
+      const totalScore = bulletsOnly.reduce((sum, hit) => sum + getHitScore(hit), 0);
+      const maxPossibleScore = bulletsOnly.length * 3; // 3 points is maximum per shot
+      const acc = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) * 100 : 0;
+
+      // 1) Save analytics snapshot
+      await saveAnalytics(lane.sessionId, {
+        mpiDistance: stats.mpi || 0,
+        mpiXCoordinate: mpi ? mpi.x : 0,
+        mpiYCoordinate: mpi ? mpi.y : 0,
+        mpiCoordsX: mpi ? (mpi.x - 200) : 0,
+        mpiCoordsY: mpi ? (200 - mpi.y) : 0,
+        accuracyPercentage: acc, // Use the corrected score-based accuracy
+        avgDistance: stats.avgDistance || 0,
+        maxDistance: stats.maxDistance || 0,
+        groupSize: stats.groupSize || 0,
+        referencePointType: stats.referencePoint || 'center',
+        referenceXCoordinate: reference.x,
+        referenceYCoordinate: reference.y,
+        shotsAnalyzed: bulletsOnly.length,
+        bulletsCount: (data?.bullets || []).length,
+        showResults: !!data?.showResults,
+        shootingPhase: data?.shootingPhase || 'DONE'
+      });
+
+      // 2) Auto-save a compact final report (same logic as FinalReport component)
+
+      const sessionType = lane.parameters?.sessionType;
+      let performanceRating = 'BEGINNER';
+      let performanceEmoji = '🔰';
+
+      // Session-type specific remarks for TEST sessions
+      if (sessionType === 'test') {
+        if (acc > 70) { performanceRating = 'MARKSMAN'; performanceEmoji = '🏆'; }
+        else if (acc >= 60) { performanceRating = 'FIRST CLASS'; performanceEmoji = '🥇'; }
+        else if (acc >= 40) { performanceRating = 'SECOND CLASS'; performanceEmoji = '🥈'; }
+        else { performanceRating = 'FAILED'; performanceEmoji = '❌'; }
+      } else {
+        // General performance ratings for other session types
+        if (acc >= 90) { performanceRating = 'EXPERT MARKSMAN'; performanceEmoji = '🏆'; }
+        else if (acc >= 80) { performanceRating = 'SKILLED SHOOTER'; performanceEmoji = '🥇'; }
+        else if (acc >= 70) { performanceRating = 'COMPETENT SHOOTER'; performanceEmoji = '🥈'; }
+        else if (acc >= 60) { performanceRating = 'DEVELOPING SHOOTER'; performanceEmoji = '🥉'; }
+        else if (acc >= 50) { performanceRating = 'NOVICE SHOOTER'; performanceEmoji = '📈'; }
+      }
+
+      // Use the totalScore already calculated above
+
+      // Convert MPI to target coordinate system (+x right, +y up with origin at center)
+      const trueMpiX = mpi ? (mpi.x - 200) : 0;
+      const trueMpiY = mpi ? (200 - mpi.y) : 0;
+
+      const report = {
+        totalScore,
+        accuracyPercentage: acc, // Use the corrected score-based accuracy
+        mpiDistance: stats.mpi || 0,
+        groupSize: stats.groupSize || 0,
+        maxDistance: stats.maxDistance || 0,
+        avgDistance: stats.avgDistance || 0,
+        trueMpiX,
+        trueMpiY,
+        referencePoint: data?.bullseye ? 'custom bullseye' : 'center',
+        shotsAnalyzed: bulletsOnly.length,
+        shotsFired: bulletsOnly.length,
+        templateName: lanes[activeLaneId]?.template?.name || null,
+        templateDiameter: lanes[activeLaneId]?.template?.diameter || null,
+        firingMode: lanes[activeLaneId]?.parameters?.firingMode || null,
+        targetDistance: lanes[activeLaneId]?.parameters?.targetDistance || null,
+        zeroingDistance: lanes[activeLaneId]?.parameters?.zeroingDistance || null,
+        performanceRating,
+        performanceEmoji
+      };
+
+      // Simple signature to avoid duplicate saves for same computed snapshot
+      const signature = JSON.stringify({
+        s: lane.sessionId,
+        a: report.accuracyPercentage,
+        m: report.mpiDistance,
+        g: report.groupSize,
+        x: report.maxDistance,
+        n: report.shotsAnalyzed,
+        tX: report.trueMpiX,
+        tY: report.trueMpiY,
+        sc: report.totalScore,
+        tmpl: report.templateDiameter
+      });
+
+      if (!finalReportSigRef.current) finalReportSigRef.current = {};
+      if (finalReportSigRef.current[lane.sessionId] !== signature) {
+        await saveFinalReport(lane.sessionId, report);
+        finalReportSigRef.current[lane.sessionId] = signature;
+      }
+    } catch (e) {
+      // Don't block UI if analytics save fails
+      console.warn('Failed to save analytics/final report:', e.message);
+    }
+  }, [activeLaneId, lanes]);
+  // Auto-switch to analytics tab when results are ready (timed mode expiry)
+  useEffect(() => {
+    const laneAnalytics = analyticsData[activeLaneId];
+    if (laneAnalytics?.showResults) {
+      setActiveTab('analytics');
+    }
+  }, [analyticsData, activeLaneId]);
+
 
   // Handle bullseye setting
-  const handleBullseyeSet = useCallback((bullseye) => {
-    updateLane(activeLaneId, {
-      bullseye,
-      message: '📍 Target Acquired'
-    });
-  }, [activeLaneId]);
+  const handleBullseyeSet = useCallback(async (bullseye) => {
+    updateLane(activeLaneId, { bullseye, message: '📍 Target Acquired' });
+
+    // Persist to backend if session exists
+    try {
+      const lane = lanes[activeLaneId];
+      if (lane?.sessionId && bullseye) {
+        const { saveBullseye } = await import('../services/api');
+        await saveBullseye(lane.sessionId, { x: bullseye.x, y: bullseye.y });
+      }
+    } catch (e) {
+      console.warn('Failed to save bullseye:', e.message);
+    }
+  }, [activeLaneId, lanes]);
 
   // Handle adding hits
-  const handleAddHit = useCallback((hit) => {
+  const handleAddHit = useCallback(async (hit) => {
     // Handle reset signal from TargetDisplay
     if (hit && hit.type === 'RESET') {
       updateLane(activeLaneId, {
         hits: [],
         bullseye: null,
+        template: null,
+        parameters: null,
+        uploadedImage: null,
+        shooter: '',
+        shooterId: null,
+        sessionId: null,
         message: '🎯 Target Reset'
       });
       return;
     }
 
-    const activeLane = lanes[activeLaneId];
-    const newHits = [...activeLane.hits, hit];
-    updateLane(activeLaneId, {
-      hits: newHits,
-      message: '🎯 Hit Registered'
-    });
+    const lane = lanes[activeLaneId];
 
-    // Show calculating message after a few shots
+    // Compute per-hit score using zone-based scoring system
+    const refPoint = lane?.bullseye ? lane.bullseye : { x: 200, y: 200 };
+
+    // Create a template object if we don't have one, using a fallback diameter
+    const effectiveTemplate = lane?.template || { diameter: 150 }; // 150mm = 50px radius fallback (consistent with TargetDisplay)
+    const esaParameter = lane?.parameters?.esa || null;
+    const ringRadii = calculateRingRadii(effectiveTemplate, esaParameter);
+
+    const scoreForHit = calculateZoneScore(hit, refPoint, ringRadii);
+
+    const scoredHit = { ...hit, score: Number.isFinite(scoreForHit) ? scoreForHit : 0 };
+
+    const newHits = [...lane.hits, scoredHit];
+    updateLane(activeLaneId, { hits: newHits, message: '🎯 Hit Registered' });
+
+    // Persist shot to backend with proper shot number calculation
+    try {
+      if (lane?.sessionId && scoredHit && !scoredHit.isBullseye) {
+        const { saveShots, getSessionDetails } = await import('../services/api');
+
+        // Get current shot count from database to ensure proper shot numbering
+        let shotNumber = newHits.length; // Default fallback
+        try {
+          const sessionDetails = await getSessionDetails(lane.sessionId);
+          const existingShots = sessionDetails?.shots || [];
+          shotNumber = existingShots.length + 1; // Next shot number based on database
+        } catch (shotCountError) {
+          console.warn('Could not get shot count from database, using lane count:', shotCountError.message);
+        }
+
+        await saveShots(lane.sessionId, [{
+          shotNumber: shotNumber,
+          x: scoredHit.x,
+          y: scoredHit.y,
+          timestamp: scoredHit.timestamp || Date.now(),
+          score: scoredHit.score || 0,
+          isBullseye: !!scoredHit.isBullseye,
+          timePhase: scoredHit.timePhase || null
+        }]);
+      }
+    } catch (e) {
+      console.warn('Failed to save shot:', e.message);
+    }
+
     if (newHits.length >= 3) {
       setTimeout(() => {
-        updateLane(activeLaneId, {
-          hits: newHits,
-          message: '🧠 Calculating Score...'
-        });
+        updateLane(activeLaneId, { hits: newHits, message: '🧠 Calculating Score...' });
       }, 1000);
     }
-  }, [activeLaneId, lanes]);
+  }, [activeLaneId, lanes, updateLane]);
 
   // Handle parameters update
-  const handleParametersUpdate = useCallback((laneId, parameters) => {
-    updateLane(laneId, {
-      parameters,
-      message: '⚙️ Parameters Set'
-    });
-  }, []);
+  const handleParametersUpdate = useCallback(async (laneId, parameters) => {
+    // Map selected templateId from parameters to actual template object for this lane
+    let template = null;
+    if (parameters && parameters.templateId) {
+      const match = (typeof parameters.templateId === 'string') ? parameters.templateId : '';
+      template = (TARGET_TEMPLATES || []).find(t => t.id === match) || null;
+    }
+
+    // Merge with existing to preserve run-once flags; default hasRun=false if not provided
+    const existing = lanes[laneId]?.parameters || {};
+    const mergedParams = { ...existing, ...parameters };
+    if (typeof mergedParams.hasRun === 'undefined') mergedParams.hasRun = false;
+
+    updateLane(laneId, { parameters: mergedParams, template, message: template ? '🔒 Target Locked' : '⚙️ Parameters Set' });
+
+    // Persist to backend (strip internal-only fields like hasRun)
+    try {
+      const lane = lanes[laneId];
+      if (lane?.sessionId) {
+        const { saveParameters } = await import('../services/api');
+        const { hasRun, ...rest } = mergedParams;
+        const paramsToSave = {
+          ...rest,
+          templateName: template?.name || null,
+          templateDiameter: template?.diameter || null
+        };
+        await saveParameters(lane.sessionId, paramsToSave);
+      }
+    } catch (e) {
+      console.warn('Failed to save parameters:', e.message);
+    }
+  }, [lanes, updateLane]);
 
 
+
+  // Fetch shooter session count
+  const fetchShooterSessionCount = async (shooterName) => {
+    try {
+      const { getShooterHistory } = await import('../services/api');
+      const sessions = await getShooterHistory(shooterName);
+      return sessions.length;
+    } catch (e) {
+      console.warn('Failed to fetch shooter session count:', e);
+      return 0;
+    }
+  };
 
   // Handle shooter assignment
-  const handleShooterAssignment = (shooterName) => {
-    if (shooterName.trim()) {
+  const handleShooterAssignment = async (shooterName, shooterId = null) => {
+    if (!shooterName.trim()) return;
+
+    // Create/find shooter + create a new session in backend
+    try {
+      const sessionData = {
+        shooter_name: shooterName.trim(),
+        shooter_id: shooterId === 'NEW' ? null : shooterId, // Force new shooter if 'NEW' flag
+        force_new_shooter: shooterId === 'NEW', // Add flag to force new shooter creation
+        lane_id: activeLaneId,
+        session_name: `${shooterName.trim()} - ${new Date().toLocaleString()}`
+      };
+
+      const session = await (await import('../services/api')).createSession(sessionData);
+
       updateLane(activeLaneId, {
         shooter: shooterName.trim(),
-        message: '👤 Shooter Ready'
+        shooterId: session.shooter_id, // Store the actual shooter ID from the session
+        sessionId: session.id,
+        message: shooterId === 'NEW' ? '👤 New Shooter Created (Session Started)' : '👤 Shooter Ready (Session Started)'
       });
+
+      // Wait a moment for database transaction to complete, then fetch updated session count
+      setTimeout(async () => {
+        try {
+          const sessionCount = await fetchShooterSessionCount(shooterName.trim());
+          setShooterSessionCounts(prev => ({
+            ...prev,
+            [shooterName.trim()]: sessionCount
+          }));
+        } catch (e) {
+          console.warn('Failed to update session count:', e);
+        }
+      }, 500); // 500ms delay to ensure database is updated
+
+    } catch (e) {
+      console.error('Failed to create session:', e);
+      updateLane(activeLaneId, { message: '❌ Failed to start session' });
     }
   };
 
@@ -443,14 +987,33 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
             flexDirection: screenSize.isMobile ? 'column' : 'row',
             gap: screenSize.isMobile ? '8px' : '0'
           }}>
-            <span style={{
-              color: '#94a3b8',
-              fontSize: screenSize.isMobile ? '0.75rem' : '0.875rem',
-              fontWeight: '600',
-              letterSpacing: '0.05em'
-            }}>
-              LANE CONTROLS
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{
+                color: '#94a3b8',
+                fontSize: screenSize.isMobile ? '0.75rem' : '0.875rem',
+                fontWeight: '600',
+                letterSpacing: '0.05em'
+              }}>
+                LANE CONTROLS
+              </span>
+              <button
+                onClick={() => navigate('/shooters')}
+                style={{
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: 'white',
+                  padding: screenSize.isMobile ? '4px 8px' : '6px 12px',
+                  fontSize: screenSize.isMobile ? '0.625rem' : '0.75rem',
+                  fontWeight: '600',
+                  borderRadius: '4px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+                title="View all shooters and their profiles"
+              >
+                👥 ALL SHOOTERS
+              </button>
+            </div>
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -622,7 +1185,12 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
                       <div style={{ flex: 1 }}>
                         <ShooterAssignmentForm
                           onAssign={handleShooterAssignment}
+                          currentShooter={activeLane.shooter}
                           isMobile={screenSize.isMobile}
+                          shooterSessionCount={shooterSessionCounts[activeLane.shooter] || 0}
+                          lanes={lanes}
+                          activeLaneId={activeLaneId}
+                          navigateToProfile={navigate}
                         />
                       </div>
                     )}
@@ -635,7 +1203,7 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
                         const targetContainer = document.querySelector(`[data-lane-id="${activeLaneId}"]`);
                         console.log('Target container found:', targetContainer);
                         if (targetContainer) {
-                          const event = new CustomEvent('openParameterForm', { 
+                          const event = new CustomEvent('openParameterForm', {
                             detail: { laneId: activeLaneId },
                             bubbles: true,
                             cancelable: true
@@ -702,98 +1270,7 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
                       🎯 SIMULATE
                     </button>
 
-                    {/* Template Dropdown Selector */}
-                    <select
-                      value={activeLane.template?.id || ''}
-                      onChange={(e) => {
-                        const templateId = e.target.value;
-                        const TARGET_TEMPLATES = [
-                          {
-                            id: 'air-pistol-10m',
-                            name: '10m Air Pistol (Individual)',
-                            diameter: 11.5,
-                            distance: '10m',
-                            caliber: '4.5mm air pistol',
-                            description: 'Standard 10-ring target for air pistol competition'
-                          },
-                          {
-                            id: 'pistol-25m-precision',
-                            name: '25m Pistol Precision',
-                            diameter: 50,
-                            distance: '25m',
-                            caliber: '.22 LR rimfire',
-                            description: 'Precision pistol target for 25m competition'
-                          },
-                          {
-                            id: 'pistol-25m-rapid',
-                            name: '25m Rapid Fire Pistol',
-                            diameter: 50,
-                            distance: '25m',
-                            caliber: '.22 Short',
-                            description: 'Rapid fire pistol target'
-                          },
-                          {
-                            id: 'rifle-50m',
-                            name: '50m Rifle Prone',
-                            diameter: 10.4,
-                            distance: '50m',
-                            caliber: '.22 LR',
-                            description: 'Small bore rifle target'
-                          },
-                          {
-                            id: 'air-rifle-10m',
-                            name: '10m Air Rifle',
-                            diameter: 0.5,
-                            distance: '10m',
-                            caliber: '4.5mm air rifle',
-                            description: 'Precision air rifle target'
-                          },
-                          {
-                            id: 'custom',
-                            name: 'Custom Target',
-                            diameter: 30,
-                            distance: 'Variable',
-                            caliber: 'Various',
-                            description: 'Custom target configuration'
-                          }
-                        ];
-                        if (templateId) {
-                          const template = TARGET_TEMPLATES.find(t => t.id === templateId);
-                          updateLane(activeLaneId, {
-                            template,
-                            message: '🔒 Target Locked'
-                          });
-                        } else {
-                          updateLane(activeLaneId, {
-                            template: null,
-                            message: '🔓 Target Unlocked'
-                          });
-                        }
-                      }}
-                      style={{
-                        background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                        color: 'black', // Changed from 'white' to 'black'
-                        padding: screenSize.isMobile ? '6px 12px' : '8px 16px',
-                        fontSize: screenSize.isMobile ? '12px' : '14px',
-                        fontWeight: '600',
-                        borderRadius: '6px',
-                        border: 'none',
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        flexShrink: 0,
-                        boxShadow: '0 2px 6px rgba(59, 130, 246, 0.3)',
-                        height: '32px',
-                        minWidth: screenSize.isMobile ? '120px' : '160px'
-                      }}
-                    >
-                      <option value="">📋 Select Template</option>
-                      <option value="air-pistol-10m">🎯 10m Air Pistol</option>
-                      <option value="pistol-25m-precision">🎯 25m Precision</option>
-                      <option value="pistol-25m-rapid">🎯 25m Rapid Fire</option>
-                      <option value="rifle-50m">🎯 50m Rifle</option>
-                      <option value="air-rifle-10m">🎯 10m Air Rifle</option>
-                      <option value="custom">🎯 Custom Target</option>
-                    </select>
+
                   </div>
                 </div>
               </div>
@@ -922,6 +1399,8 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
                     bullseye={activeLane.bullseye}
                     template={activeLane.template}
                     laneId={activeLaneId}
+                    shootingParameters={activeLane.parameters}
+                    visualRingRadii={analyticsData[activeLaneId]?.visualRingRadii}
                   />
                 )}
 
@@ -932,6 +1411,19 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
                     bullseye={activeLane.bullseye}
                     template={activeLane.template}
                     laneId={activeLaneId}
+                    sessionType={activeLane.parameters?.sessionType}
+                    shootingParameters={activeLane.parameters}
+                    onSaveReport={async (report) => {
+                      try {
+                        const lane = lanes[activeLaneId];
+                        if (lane?.sessionId) {
+                          const { saveFinalReport } = await import('../services/api');
+                          await saveFinalReport(lane.sessionId, report);
+                        }
+                      } catch (e) {
+                        console.warn('Failed to save final report:', e.message);
+                      }
+                    }}
                   />
                 )}
               </div>

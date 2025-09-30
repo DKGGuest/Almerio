@@ -1,0 +1,51 @@
+{
+  "name": "shooting-range-dashboard-server",
+  "version": "1.0.0",
+  "description": "Backend server for Shooting Range Dashboard with MySQL database",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "echo 'Build completed'",
+    "dev": "nodemon server.js",
+    "test": "node test_database.js",
+    "init-db": "node -e \"require('./database_config').initializeDatabase().then(() => process.exit(0)).catch(e => {console.error(e); process.exit(1);})\"",
+    "test-connection": "node -e \"require('./database_config').testConnection().then(r => {console.log('Connection:', r ? 'OK' : 'FAILED'); process.exit(r ? 0 : 1);})\"",
+    "reset-db": "node -e \"const {db} = require('./database_config'); db.query('DROP DATABASE IF EXISTS shooting_range_db').then(() => require('./database_config').initializeDatabase()).then(() => {console.log('Database reset complete'); process.exit(0);}).catch(e => {console.error(e); process.exit(1);})\""
+  },
+  "keywords": [
+    "shooting",
+    "range",
+    "dashboard",
+    "mysql",
+    "express",
+    "api",
+    "analytics",
+    "performance"
+  ],
+  "author": "Shooting Range Dashboard Team",
+  "license": "MIT",
+  "dependencies": {
+    "compression": "^1.7.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
+    "mysql2": "^3.6.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-username/shooting-range-dashboard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/shooting-range-dashboard/issues"
+  },
+  "homepage": "https://github.com/your-username/shooting-range-dashboard#readme"
+}
