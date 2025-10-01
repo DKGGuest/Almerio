@@ -57,14 +57,43 @@ app.use((req, res, next) => {
 // API ROUTES
 // =====================================================
 
+// Database initialization flag
+let dbInitialized = false;
+
+// Initialize database on first request (for serverless environments)
+async function ensureDatabase() {
+    if (!dbInitialized) {
+        try {
+            console.log('🔧 Initializing database schema...');
+            await initializeDatabase();
+            dbInitialized = true;
+            console.log('✅ Database initialized successfully');
+        } catch (error) {
+            console.error('❌ Database initialization failed:', error.message);
+            throw error;
+        }
+    }
+}
+
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
     try {
         const dbConnected = await testConnection();
+
+        // Try to initialize database if not already done
+        if (dbConnected && !dbInitialized) {
+            try {
+                await ensureDatabase();
+            } catch (initError) {
+                console.error('Database init error:', initError.message);
+            }
+        }
+
         res.json({
             status: 'ok',
             timestamp: new Date().toISOString(),
             database: dbConnected ? 'connected' : 'disconnected',
+            initialized: dbInitialized,
             version: '1.0.0'
         });
     } catch (error) {
