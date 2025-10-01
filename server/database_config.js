@@ -69,6 +69,16 @@ const dbConfig = {
     ssl: getSSLConfig()
 };
 
+// Debug logging for Vercel
+console.log('🔧 Database Configuration:');
+console.log('  Host:', dbConfig.host);
+console.log('  Port:', dbConfig.port);
+console.log('  Database:', dbConfig.database);
+console.log('  User:', dbConfig.user);
+console.log('  SSL Enabled:', !!dbConfig.ssl);
+console.log('  DB_SSL env:', process.env.DB_SSL);
+console.log('  DB_SSL_CA_BASE64 present:', !!process.env.DB_SSL_CA_BASE64);
+
 // Create connection pool
 const pool = mysql.createPool(dbConfig);
 
