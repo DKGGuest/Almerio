@@ -588,19 +588,23 @@ const SessionDetailsPage = () => {
                 <span style={{ fontWeight: '600', textTransform: 'capitalize' }}>{getSessionType()}</span>
               </div>
 
-              {/* Weapon & Target */}
-              {sessionData?.parameters?.weapon_type && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f0f9ff', borderRadius: '4px' }}>
-                  <span style={{ color: '#64748b', fontWeight: '500' }}>🔫 Weapon:</span>
-                  <span style={{ fontWeight: '600' }}>{getWeaponTypeLabel(sessionData.parameters.weapon_type) || sessionData.parameters.weapon_type.replace(/-/g, ' ').toUpperCase()}</span>
-                </div>
-              )}
-              {sessionData?.parameters?.target_type && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f0f9ff', borderRadius: '4px' }}>
-                  <span style={{ color: '#64748b', fontWeight: '500' }}>🎯 Target Type:</span>
-                  <span style={{ fontWeight: '600' }}>{getTargetTypeLabel(sessionData.parameters.target_type) || sessionData.parameters.target_type.replace(/-/g, ' ').toUpperCase()}</span>
-                </div>
-              )}
+              {/* Weapon & Target - Always show */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f0f9ff', borderRadius: '4px' }}>
+                <span style={{ color: '#64748b', fontWeight: '500' }}>🔫 Weapon:</span>
+                <span style={{ fontWeight: '600' }}>
+                  {sessionData?.parameters?.weapon_type
+                    ? (getWeaponTypeLabel(sessionData.parameters.weapon_type) || sessionData.parameters.weapon_type.replace(/-/g, ' ').toUpperCase())
+                    : 'N/A'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f0f9ff', borderRadius: '4px' }}>
+                <span style={{ color: '#64748b', fontWeight: '500' }}>🎯 Target Type:</span>
+                <span style={{ fontWeight: '600' }}>
+                  {sessionData?.parameters?.target_type
+                    ? (getTargetTypeLabel(sessionData.parameters.target_type) || sessionData.parameters.target_type.replace(/-/g, ' ').toUpperCase())
+                    : 'N/A'}
+                </span>
+              </div>
 
               {/* Target Distance (from TARGET_TEMPLATES) */}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f0fdf4', borderRadius: '4px' }}>
@@ -608,46 +612,92 @@ const SessionDetailsPage = () => {
                 <span style={{ fontWeight: '600' }}>{getTargetDistanceFromTemplate()}</span>
               </div>
 
-              {/* Shooting Position */}
-              {sessionData?.parameters?.shooting_position && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#fefce8', borderRadius: '4px' }}>
-                  <span style={{ color: '#64748b', fontWeight: '500' }}>🧍 Position:</span>
-                  <span style={{ fontWeight: '600' }}>{getShootingPositionLabel(sessionData.parameters.shooting_position) || sessionData.parameters.shooting_position.toUpperCase()}</span>
-                </div>
-              )}
-              {sessionData?.parameters?.shot_type && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#fefce8', borderRadius: '4px' }}>
-                  <span style={{ color: '#64748b', fontWeight: '500' }}>💥 Shot Type:</span>
-                  <span style={{ fontWeight: '600' }}>{getShotTypeLabel(sessionData.parameters.shot_type) || sessionData.parameters.shot_type.charAt(0).toUpperCase() + sessionData.parameters.shot_type.slice(1)}</span>
-                </div>
-              )}
+              {/* Shooting Position - Always show */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#fefce8', borderRadius: '4px' }}>
+                <span style={{ color: '#64748b', fontWeight: '500' }}>🧍 Position:</span>
+                <span style={{ fontWeight: '600' }}>
+                  {sessionData?.parameters?.shooting_position
+                    ? (getShootingPositionLabel(sessionData.parameters.shooting_position) || sessionData.parameters.shooting_position.toUpperCase())
+                    : 'N/A'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#fefce8', borderRadius: '4px' }}>
+                <span style={{ color: '#64748b', fontWeight: '500' }}>💥 Shot Type:</span>
+                <span style={{ fontWeight: '600' }}>
+                  {sessionData?.parameters?.shot_type
+                    ? (getShotTypeLabel(sessionData.parameters.shot_type) || sessionData.parameters.shot_type.charAt(0).toUpperCase() + sessionData.parameters.shot_type.slice(1))
+                    : 'N/A'}
+                </span>
+              </div>
 
-              {/* Timing Parameters - Only show for timed mode */}
-              {sessionData?.parameters?.firing_mode === 'timed' && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#fdf2f8', borderRadius: '4px' }}>
-                  <span style={{ color: '#64748b', fontWeight: '500' }}>⏱️ Time Limit:</span>
-                  <span style={{ fontWeight: '600' }}>{getTimeLimit()}</span>
-                </div>
-              )}
-              {sessionData?.parameters?.number_of_rounds && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#fdf2f8', borderRadius: '4px' }}>
-                  <span style={{ color: '#64748b', fontWeight: '500' }}>🔢 Rounds:</span>
-                  <span style={{ fontWeight: '600' }}>{sessionData.parameters.number_of_rounds}</span>
-                </div>
-              )}
+              {/* Rounds - Always show */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#fdf2f8', borderRadius: '4px' }}>
+                <span style={{ color: '#64748b', fontWeight: '500' }}>🔢 Rounds:</span>
+                <span style={{ fontWeight: '600' }}>{sessionData?.parameters?.number_of_rounds || 'N/A'}</span>
+              </div>
 
-              {/* Advanced Parameters */}
-              {sessionData?.parameters?.esa && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f3e8ff', borderRadius: '4px' }}>
-                  <span style={{ color: '#64748b', fontWeight: '500' }}>🎯 ESA:</span>
-                  <span style={{ fontWeight: '600' }}>{sessionData.parameters.esa}</span>
-                </div>
-              )}
+              {/* Advanced Parameters - Always show */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f3e8ff', borderRadius: '4px' }}>
+                <span style={{ color: '#64748b', fontWeight: '500' }}>🎯 ESA:</span>
+                <span style={{ fontWeight: '600' }}>{sessionData?.parameters?.esa || 'N/A'}</span>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f3e8ff', borderRadius: '4px' }}>
                 <span style={{ color: '#64748b', fontWeight: '500' }}>🏃 Lane:</span>
                 <span style={{ fontWeight: '600' }}>{sessionData?.session?.lane_id || 'N/A'}</span>
               </div>
             </div>
+
+            {/* Advanced Settings Section - Mode-specific parameters */}
+            {(sessionData?.parameters?.firing_mode === 'moving' ||
+              sessionData?.parameters?.firing_mode === 'snap' ||
+              sessionData?.parameters?.firing_mode === 'timed') && (
+              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
+                <h4 style={{ fontSize: '14px', fontWeight: 'bold', color: '#64748b', marginBottom: '12px' }}>
+                  ⚙️ Advanced Settings
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px' }}>
+                  {/* Moving Target Parameters */}
+                  {sessionData?.parameters?.firing_mode === 'moving' && (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
+                        <span style={{ color: '#64748b', fontWeight: '500' }}>Moving Direction:</span>
+                        <span style={{ fontWeight: '600' }}>{sessionData.parameters.moving_direction?.toUpperCase() || 'N/A'}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
+                        <span style={{ color: '#64748b', fontWeight: '500' }}>Moving Speed:</span>
+                        <span style={{ fontWeight: '600' }}>{sessionData.parameters.moving_speed ? `${sessionData.parameters.moving_speed}x` : 'N/A'}</span>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Snap Target Parameters */}
+                  {sessionData?.parameters?.firing_mode === 'snap' && (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
+                        <span style={{ color: '#64748b', fontWeight: '500' }}>Display Time:</span>
+                        <span style={{ fontWeight: '600' }}>{sessionData.parameters.snap_display_time ? `${sessionData.parameters.snap_display_time}s` : 'N/A'}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
+                        <span style={{ color: '#64748b', fontWeight: '500' }}>Disappear Time:</span>
+                        <span style={{ fontWeight: '600' }}>{sessionData.parameters.snap_disappear_time ? `${sessionData.parameters.snap_disappear_time}s` : 'N/A'}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
+                        <span style={{ color: '#64748b', fontWeight: '500' }}>Cycles:</span>
+                        <span style={{ fontWeight: '600' }}>{sessionData.parameters.snap_cycles || 'N/A'}</span>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Timed Mode Parameters */}
+                  {sessionData?.parameters?.firing_mode === 'timed' && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
+                      <span style={{ color: '#64748b', fontWeight: '500' }}>⏱️ Time Limit:</span>
+                      <span style={{ fontWeight: '600' }}>{sessionData.parameters.time_limit ? `${sessionData.parameters.time_limit}s` : 'N/A'}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Additional Parameters Section */}
             {(sessionData?.parameters?.wind_speed || sessionData?.parameters?.moving_direction ||

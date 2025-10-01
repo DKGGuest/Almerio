@@ -808,6 +808,13 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
     // Persist shot to backend with proper shot number calculation
     try {
       if (lane?.sessionId && scoredHit && !scoredHit.isBullseye) {
+        console.log('💾 Saving shot to database...', {
+          sessionId: lane.sessionId,
+          x: scoredHit.x,
+          y: scoredHit.y,
+          score: scoredHit.score
+        });
+
         const { saveShots, getSessionDetails } = await import('../services/api');
 
         // Get current shot count from database to ensure proper shot numbering
@@ -816,22 +823,37 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
           const sessionDetails = await getSessionDetails(lane.sessionId);
           const existingShots = sessionDetails?.shots || [];
           shotNumber = existingShots.length + 1; // Next shot number based on database
+          console.log(`📊 Current shots in DB: ${existingShots.length}, next shot number: ${shotNumber}`);
         } catch (shotCountError) {
           console.warn('Could not get shot count from database, using lane count:', shotCountError.message);
         }
 
-        await saveShots(lane.sessionId, [{
+        const shotData = {
           shotNumber: shotNumber,
           x: scoredHit.x,
           y: scoredHit.y,
           timestamp: scoredHit.timestamp || Date.now(),
           score: scoredHit.score || 0,
           isBullseye: !!scoredHit.isBullseye,
-          timePhase: scoredHit.timePhase || null
-        }]);
+          timePhase: (scoredHit.timePhase && ['COUNTDOWN', 'WINDOW', 'OVERTIME'].includes(scoredHit.timePhase))
+            ? scoredHit.timePhase
+            : null
+        };
+
+        console.log('📤 Sending shot data:', shotData);
+        const result = await saveShots(lane.sessionId, [shotData]);
+        console.log('✅ Shot saved successfully:', result);
+      } else {
+        console.log('⏭️ Skipping shot save:', {
+          hasSessionId: !!lane?.sessionId,
+          hasScoredHit: !!scoredHit,
+          isBullseye: scoredHit?.isBullseye,
+          reason: !lane?.sessionId ? 'No session ID' : scoredHit?.isBullseye ? 'Is bullseye' : 'Unknown'
+        });
       }
     } catch (e) {
-      console.warn('Failed to save shot:', e.message);
+      console.error('❌ Failed to save shot:', e);
+      console.error('Error details:', e.message, e.stack);
     }
 
     if (newHits.length >= 3) {

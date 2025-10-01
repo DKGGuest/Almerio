@@ -25,6 +25,24 @@ This is the backend server for the Shooting Range Dashboard system. It provides 
 
 ## Quick Start
 
+### Option A: Using Aiven MySQL (Cloud Database - Recommended for Vercel)
+
+**🚀 Quick Setup:**
+```bash
+cd server
+node setup_aiven.js
+```
+
+Follow the interactive prompts to configure your Aiven database connection.
+
+**📚 Detailed Guide:** See [AIVEN_QUICK_START.md](../AIVEN_QUICK_START.md) for complete instructions.
+
+**What you need:**
+- Aiven MySQL database credentials (host, port, user, password)
+- CA certificate file (ca.pem) downloaded from Aiven
+
+### Option B: Using Local MySQL
+
 ### 1. Prerequisites
 - MySQL Server 8.0+
 - Node.js 16.0+

@@ -144,7 +144,7 @@ app.get('/api/shooters/:id', async (req, res) => {
                    sp.time_limit, sp.rounds, sp.zeroing_distance, sp.template_id, sp.template_diameter,
                    sp.wind_direction, sp.wind_speed, sp.moving_direction, sp.moving_speed,
                    sp.snap_display_time, sp.snap_disappear_time, sp.snap_cycles, sp.snap_start_behavior, sp.notes as param_notes,
-                   pa.accuracy_percentage, pa.mpi_distance, pa.shots_analyzed, pa.group_size, pa.max_distance,
+                   pa_ranked.accuracy_percentage, pa_ranked.mpi_distance, pa_ranked.shots_analyzed, pa_ranked.group_size, pa_ranked.max_distance,
                    fr_ranked.total_score, fr_ranked.performance_rating
             FROM shooting_sessions ss
             LEFT JOIN (
@@ -156,7 +156,11 @@ app.get('/api/shooters/:id', async (req, res) => {
                        ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY created_at DESC) as rn
                 FROM shooting_parameters
             ) sp ON ss.id = sp.session_id AND sp.rn = 1
-            LEFT JOIN performance_analytics pa ON ss.id = pa.session_id
+            LEFT JOIN (
+                SELECT session_id, accuracy_percentage, mpi_distance, shots_analyzed, group_size, max_distance,
+                       ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY id DESC) as rn
+                FROM performance_analytics
+            ) pa_ranked ON ss.id = pa_ranked.session_id AND pa_ranked.rn = 1
             LEFT JOIN (
                 SELECT session_id, total_score, performance_rating,
                        ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY generated_at DESC) as rn
@@ -393,8 +397,13 @@ app.get('/api/sessions/:id', async (req, res) => {
             return res.status(404).json({ error: 'Session not found' });
         }
 
-        // Get session parameters
-        const parameters = await db.findOne('SELECT * FROM shooting_parameters WHERE session_id = ?', [sessionId]);
+        // Get session parameters (latest only if multiple exist)
+        const parameters = await db.findOne(`
+            SELECT * FROM shooting_parameters
+            WHERE session_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        `, [sessionId]);
 
         // Get bullseye position
         const bullseye = await db.findOne('SELECT * FROM bullseye_positions WHERE session_id = ?', [sessionId]);
@@ -402,11 +411,28 @@ app.get('/api/sessions/:id', async (req, res) => {
         // Get shot coordinates
         const shots = await db.query('SELECT * FROM shot_coordinates WHERE session_id = ? ORDER BY shot_number ASC', [sessionId]);
 
-        // Get performance analytics
-        const analytics = await db.findOne('SELECT * FROM performance_analytics WHERE session_id = ?', [sessionId]);
+        // Get performance analytics (latest only if multiple exist)
+        const analytics = await db.findOne(`
+            SELECT * FROM performance_analytics
+            WHERE session_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+        `, [sessionId]);
 
-        // Get final report
-        const finalReport = await db.findOne('SELECT * FROM final_reports WHERE session_id = ?', [sessionId]);
+        // Get final report (latest only if multiple exist)
+        const finalReport = await db.findOne(`
+            SELECT * FROM final_reports
+            WHERE session_id = ?
+            ORDER BY generated_at DESC
+            LIMIT 1
+        `, [sessionId]);
+
+        console.log(`📊 Session ${sessionId} details:`, {
+            hasParameters: !!parameters,
+            hasAnalytics: !!analytics,
+            hasFinalReport: !!finalReport,
+            shotsCount: shots.length
+        });
 
         res.json({
             session,
@@ -527,9 +553,14 @@ app.post('/api/sessions/:id/shots', async (req, res) => {
         const sessionId = req.params.id;
         const shots = Array.isArray(req.body) ? req.body : [req.body];
 
+        console.log('💾 Saving shots for session', sessionId);
+        console.log('📊 Shot data received:', JSON.stringify(shots, null, 2));
+
         const savedShots = [];
         for (const shot of shots) {
-            const shotId = await db.insert('shot_coordinates', {
+            console.log('Processing shot:', shot);
+
+            const shotData = {
                 session_id: sessionId,
                 shot_number: shot.shotNumber || 1,
                 x_coordinate: shot.x,
@@ -540,16 +571,29 @@ app.post('/api/sessions/:id/shots', async (req, res) => {
                 is_bullseye: shot.isBullseye || false,
                 time_phase: shot.timePhase || null,
                 notes: shot.notes || null
-            });
+            };
+
+            console.log('Inserting shot data:', shotData);
+
+            const shotId = await db.insert('shot_coordinates', shotData);
+            console.log('Shot inserted with ID:', shotId);
 
             const savedShot = await db.findOne('SELECT * FROM shot_coordinates WHERE id = ?', [shotId]);
             savedShots.push(savedShot);
         }
 
+        console.log('✅ All shots saved successfully:', savedShots.length);
         res.json(savedShots);
     } catch (error) {
-        console.error('Error saving shots:', error);
-        res.status(500).json({ error: 'Failed to save shot coordinates' });
+        console.error('❌ Error saving shots:', error);
+        console.error('Error stack:', error.stack);
+        console.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            errno: error.errno,
+            sqlMessage: error.sqlMessage
+        });
+        res.status(500).json({ error: 'Failed to save shot coordinates', details: error.message });
     }
 });
 
@@ -563,8 +607,17 @@ app.post('/api/sessions/:id/analytics', async (req, res) => {
         const sessionId = req.params.id;
         const analytics = req.body;
 
-        // Delete existing analytics for this session
-        await db.delete('performance_analytics', 'session_id = ?', [sessionId]);
+        console.log(`📊 Saving analytics for session ${sessionId}`);
+
+        // Check for existing analytics
+        const existing = await db.query('SELECT id FROM performance_analytics WHERE session_id = ?', [sessionId]);
+        console.log(`Found ${existing.length} existing analytics records`);
+
+        // Delete existing analytics for this session to prevent duplicates
+        if (existing.length > 0) {
+            console.log(`Deleting ${existing.length} existing analytics records...`);
+            await db.delete('performance_analytics', 'session_id = ?', [sessionId]);
+        }
 
         // Insert new analytics
         const analyticsId = await db.insert('performance_analytics', {
@@ -587,11 +640,14 @@ app.post('/api/sessions/:id/analytics', async (req, res) => {
             shooting_phase: analytics.shootingPhase || 'DONE'
         });
 
+        console.log(`✅ Analytics saved with ID ${analyticsId}`);
+
         const savedAnalytics = await db.findOne('SELECT * FROM performance_analytics WHERE id = ?', [analyticsId]);
         res.json(savedAnalytics);
     } catch (error) {
-        console.error('Error saving analytics:', error);
-        res.status(500).json({ error: 'Failed to save performance analytics' });
+        console.error('❌ Error saving analytics:', error);
+        console.error('Error details:', error.message);
+        res.status(500).json({ error: 'Failed to save performance analytics', details: error.message });
     }
 });
 

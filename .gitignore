@@ -15,6 +15,13 @@ pnpm-debug.log*
 .env
 .env.local
 .env.*.local
+server/.env
+server/.env.local
+
+# SSL Certificates (keep secure, never commit)
+server/certs/
+*.pem
+*_base64.txt
 
 # OS / Editor
 .DS_Store

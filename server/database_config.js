@@ -4,7 +4,53 @@
 // =====================================================
 
 const mysql = require('mysql2/promise');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
+
+// SSL Configuration for Aiven and other cloud databases
+function getSSLConfig() {
+    // If SSL is explicitly disabled, return false
+    if (process.env.DB_SSL === 'false') {
+        return false;
+    }
+
+    // For Aiven or other cloud databases requiring SSL
+    if (process.env.DB_SSL === 'true' || process.env.DB_CA_CERT) {
+        const sslConfig = {
+            rejectUnauthorized: true
+        };
+
+        // If CA certificate is provided as a file path
+        if (process.env.DB_CA_CERT_PATH) {
+            try {
+                const certPath = path.resolve(process.cwd(), process.env.DB_CA_CERT_PATH);
+                if (fs.existsSync(certPath)) {
+                    sslConfig.ca = fs.readFileSync(certPath);
+                    console.log('✅ SSL certificate loaded from file');
+                }
+            } catch (error) {
+                console.error('❌ Error loading SSL certificate from file:', error.message);
+            }
+        }
+
+        // If CA certificate is provided as base64 encoded string (for Vercel)
+        if (process.env.DB_CA_CERT && !sslConfig.ca) {
+            try {
+                // Decode base64 certificate
+                sslConfig.ca = Buffer.from(process.env.DB_CA_CERT, 'base64').toString('utf-8');
+                console.log('✅ SSL certificate loaded from environment variable');
+            } catch (error) {
+                console.error('❌ Error decoding SSL certificate:', error.message);
+            }
+        }
+
+        return sslConfig;
+    }
+
+    // Default: no SSL for local development
+    return false;
+}
 
 // Database configuration
 const dbConfig = {
@@ -12,10 +58,12 @@ const dbConfig = {
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'shooting_range_db',
-    port: process.env.DB_PORT || 3306,
+    port: parseInt(process.env.DB_PORT) || 3306,
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
+    // SSL configuration
+    ssl: getSSLConfig()
 };
 
 // Create connection pool
