@@ -1,6 +1,22 @@
 // Simple API client for the backend server
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api';
+// Automatically detect API base URL based on environment
+const getApiBase = () => {
+  // If VITE_API_BASE is set, use it
+  if (import.meta.env.VITE_API_BASE) {
+    return import.meta.env.VITE_API_BASE;
+  }
+
+  // In production (Vercel), use relative path to same domain
+  if (import.meta.env.PROD) {
+    return '/api';
+  }
+
+  // In development, use localhost
+  return 'http://localhost:3001/api';
+};
+
+const API_BASE = getApiBase();
 
 async function http(method, path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
