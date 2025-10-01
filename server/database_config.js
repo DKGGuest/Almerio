@@ -16,7 +16,8 @@ function getSSLConfig() {
     }
 
     // For Aiven or other cloud databases requiring SSL
-    if (process.env.DB_SSL === 'true' || process.env.DB_CA_CERT) {
+    // Check for DB_SSL=true or presence of certificate environment variables
+    if (process.env.DB_SSL === 'true' || process.env.DB_CA_CERT || process.env.DB_SSL_CA_BASE64) {
         const sslConfig = {
             rejectUnauthorized: true
         };
@@ -35,10 +36,12 @@ function getSSLConfig() {
         }
 
         // If CA certificate is provided as base64 encoded string (for Vercel)
-        if (process.env.DB_CA_CERT && !sslConfig.ca) {
+        // Support both DB_CA_CERT and DB_SSL_CA_BASE64 environment variables
+        const base64Cert = process.env.DB_SSL_CA_BASE64 || process.env.DB_CA_CERT;
+        if (base64Cert && !sslConfig.ca) {
             try {
                 // Decode base64 certificate
-                sslConfig.ca = Buffer.from(process.env.DB_CA_CERT, 'base64').toString('utf-8');
+                sslConfig.ca = Buffer.from(base64Cert, 'base64').toString('utf-8');
                 console.log('✅ SSL certificate loaded from environment variable');
             } catch (error) {
                 console.error('❌ Error decoding SSL certificate:', error.message);
