@@ -433,11 +433,11 @@ const ShooterProfilePage = () => {
                     <span style={{ fontWeight: 'bold', color: '#10b981', marginLeft: '4px' }}>
                       {Number(session.accuracy_percentage || 0).toFixed(1)}%
                     </span>
-                    {session.target_distance && (
+                    {/* {session.target_distance && (
                       <span style={{ color: '#64748b', marginLeft: '8px' }}>
                         • 📏 {session.target_distance}m
                       </span>
-                    )}
+                    )} */}
                   </div>
                   {/* Show performance remark for test sessions */}
                   {(() => {

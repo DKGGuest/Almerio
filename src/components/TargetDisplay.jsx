@@ -21,7 +21,9 @@ import {
   getFilteredFiringModeOptions,
   isFiringModeValidForSessionType,
   calculateZoneScore,
-  calculateRingRadii
+  calculateRingRadii,
+  calculateDiameterFromDistance,
+  createTemplateFromDistance
 } from '../constants/shootingParameters';
 
 // Highly optimized bullet component with custom comparison
@@ -82,6 +84,9 @@ const ShootingParametersForm = ({ onSave, onCancel, existingParams = null }) => 
     snapStartBehavior: existingParams?.snapStartBehavior || 'appear',
     zeroingDistance: 25,
     templateId: '',
+    // Custom distance input fields
+    useCustomDistance: false,
+    customDistance: '',
     windDirection: 0,
     windSpeed: 0,
     movingDirection: 'LTR',
@@ -529,37 +534,88 @@ const ShootingParametersForm = ({ onSave, onCancel, existingParams = null }) => 
             </select>
           </div> */}
 
-          {/* Select Template (replaces Target Type) */}
+          {/* Target Distance Selection - Template or Custom */}
           <div style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#374151' }}>
-              {/* Select Template: */}
               Select Target Distance:
             </label>
-            <select
-              value={params.templateId}
-              onChange={(e) => setParams({ ...params, templateId: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                border: '2px solid #e5e7eb',
-                borderRadius: '6px',
-                fontSize: '14px'
-              }}
-            >
-              <option value="">Select template...</option>
-              {/* <option value="air-pistol-10m">10m Air Pistol (Individual)</option>
-              <option value="pistol-25m-precision">25m Pistol Precision</option>
-              <option value="pistol-25m-rapid">25m Rapid Fire Pistol</option>
-              <option value="rifle-50m">50m Rifle Prone</option>
-              <option value="air-rifle-10m">10m Air Rifle</option>
-              <option value="custom">Custom Target</option> */}
-              <option value="air-pistol-10m">10m</option>
-              <option value="pistol-25m-precision">25m</option>
-              <option value="pistol-25m-rapid">50m</option>
-              <option value="rifle-50m">100m</option>
-              <option value="air-rifle-10m">200m</option>
-              <option value="custom">300m</option>
-            </select>
+
+            {/* Distance Type Toggle */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="distanceType"
+                  checked={!params.useCustomDistance}
+                  onChange={() => setParams({ ...params, useCustomDistance: false, customDistance: '' })}
+                  style={{ marginRight: '8px' }}
+                />
+                <span style={{ fontSize: '14px', color: '#374151' }}>Use Template Distance</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="distanceType"
+                  checked={params.useCustomDistance}
+                  onChange={() => setParams({ ...params, useCustomDistance: true, templateId: '' })}
+                  style={{ marginRight: '8px' }}
+                />
+                <span style={{ fontSize: '14px', color: '#374151' }}>Enter Custom Distance</span>
+              </label>
+            </div>
+
+            {/* Template Selection */}
+            {!params.useCustomDistance && (
+              <select
+                value={params.templateId}
+                onChange={(e) => setParams({ ...params, templateId: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              >
+                <option value="">Select template...</option>
+                <option value="air-pistol-10m">10m</option>
+                <option value="pistol-25m-precision">25m</option>
+                <option value="pistol-25m-rapid">50m</option>
+                <option value="rifle-50m">100m</option>
+                <option value="air-rifle-10m">200m</option>
+                <option value="custom">300m</option>
+              </select>
+            )}
+
+            {/* Custom Distance Input */}
+            {params.useCustomDistance && (
+              <div>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  step="1"
+                  value={params.customDistance}
+                  onChange={(e) => setParams({ ...params, customDistance: e.target.value })}
+                  placeholder="Enter distance in meters (e.g., 75)"
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}
+                />
+                <div style={{
+                  fontSize: '12px',
+                  color: '#6b7280',
+                  marginTop: '4px',
+                  fontStyle: 'italic'
+                }}>
+                  Ring sizes will scale automatically: larger distances = smaller rings
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Wind Direction */}
@@ -676,6 +732,16 @@ const ShootingParametersForm = ({ onSave, onCancel, existingParams = null }) => 
 // Parameter Viewer Component
 const ParameterViewer = ({ parameters, onClose, onEdit }) => {
   const getTemplateName = (templateId) => {
+    // Check if using custom distance
+    if (parameters.useCustomDistance && parameters.customDistance) {
+      const customDistance = parseFloat(parameters.customDistance);
+      if (!isNaN(customDistance) && customDistance > 0) {
+        const diameter = calculateDiameterFromDistance(customDistance);
+        return `${customDistance}m (Custom - ${diameter.toFixed(1)}mm diameter)`;
+      }
+    }
+
+    // Fallback to template lookup
     const t = TARGET_TEMPLATES.find(tt => tt.id === templateId);
     return t ? t.name : '-';
   };
@@ -1685,7 +1751,23 @@ const TargetDisplay = memo(({
       return radius;
     }
 
-    // If no template but we have a templateId in parameters, find and use that template
+    // Check for custom distance input first
+    if (currentParams?.useCustomDistance && currentParams?.customDistance) {
+      const customDistance = parseFloat(currentParams.customDistance);
+      if (!isNaN(customDistance) && customDistance > 0) {
+        // Create virtual template from custom distance
+        const virtualTemplate = createTemplateFromDistance(customDistance);
+        if (virtualTemplate) {
+          const targetPhysicalWidth = 133; // 13.3 cm in mm
+          const targetPixelWidth = 400; // SVG width in pixels
+          const pixelsPerMm = targetPixelWidth / targetPhysicalWidth;
+          const radius = (virtualTemplate.diameter / 2) * pixelsPerMm;
+          return radius;
+        }
+      }
+    }
+
+    // If no custom distance but we have a templateId in parameters, find and use that template
     if (currentParams?.templateId) {
       const selectedTemplate = TARGET_TEMPLATES.find(t => t.id === currentParams.templateId);
       if (selectedTemplate) {

@@ -26,7 +26,7 @@ export const FIRING_MODE_OPTIONS = [
   { value: FIRING_MODES.UNTIMED, label: 'Untimed' },
   { value: FIRING_MODES.TIMED, label: 'Timed' },
   { value: FIRING_MODES.SNAP, label: 'Snap' },
-  { value: FIRING_MODES.MOVING, label: 'Moving' }
+  // { value: FIRING_MODES.MOVING, label: 'Moving' }
 ];
 
 export const WEAPON_TYPES = {
@@ -327,6 +327,79 @@ export const calculateRingRadiiWithESA = (template, shootingParameters = null) =
   return calculateRingRadii(template, esaParameter);
 };
 
+// Function to calculate diameter from custom distance input
+// Based on TARGET_TEMPLATES pattern: 10m=130mm, 25m=120mm, 50m=110mm, 100m=100mm, 200m=90mm, 300m=80mm
+export const calculateDiameterFromDistance = (distanceMeters) => {
+  // Ensure we have a valid numeric distance
+  const distance = parseFloat(distanceMeters);
+  if (isNaN(distance) || distance <= 0) {
+    return 100; // Default diameter if invalid input
+  }
+
+  // Analysis of TARGET_TEMPLATES data points:
+  // Distance (m) | Diameter (mm)
+  // 10          | 130
+  // 25          | 120
+  // 50          | 110
+  // 100         | 100
+  // 200         | 90
+  // 300         | 80
+
+  // The relationship is approximately linear with some variation
+  // Using piecewise linear interpolation for accuracy
+
+  if (distance <= 10) {
+    // For distances 10m and below, use 130mm (largest rings)
+    return 130;
+  } else if (distance <= 25) {
+    // Linear interpolation between 10m (130mm) and 25m (120mm)
+    const ratio = (distance - 10) / (25 - 10);
+    return 130 - (ratio * (130 - 120));
+  } else if (distance <= 50) {
+    // Linear interpolation between 25m (120mm) and 50m (110mm)
+    const ratio = (distance - 25) / (50 - 25);
+    return 120 - (ratio * (120 - 110));
+  } else if (distance <= 100) {
+    // Linear interpolation between 50m (110mm) and 100m (100mm)
+    const ratio = (distance - 50) / (100 - 50);
+    return 110 - (ratio * (110 - 100));
+  } else if (distance <= 200) {
+    // Linear interpolation between 100m (100mm) and 200m (90mm)
+    const ratio = (distance - 100) / (200 - 100);
+    return 100 - (ratio * (100 - 90));
+  } else if (distance <= 300) {
+    // Linear interpolation between 200m (90mm) and 300m (80mm)
+    const ratio = (distance - 200) / (300 - 200);
+    return 90 - (ratio * (90 - 80));
+  } else {
+    // For distances beyond 300m, continue the trend (smaller rings)
+    // Extrapolate using the 200m-300m slope: -10mm per 100m
+    const extraDistance = distance - 300;
+    const slopePerMeter = -10 / 100; // -0.1mm per meter
+    return Math.max(80 + (extraDistance * slopePerMeter), 20); // Minimum 20mm diameter
+  }
+};
+
+// Function to create a virtual template object from custom distance
+export const createTemplateFromDistance = (distanceMeters, customId = null) => {
+  const distance = parseFloat(distanceMeters);
+  if (isNaN(distance) || distance <= 0) {
+    return null;
+  }
+
+  const diameter = calculateDiameterFromDistance(distance);
+
+  return {
+    id: customId || `custom-${distance}m`,
+    name: `${distance}m`,
+    diameter: Math.round(diameter * 10) / 10, // Round to 1 decimal place
+    distance: `${distance}m`,
+    caliber: 'Custom',
+    description: `Custom target for ${distance}m distance`,
+    isCustom: true
+  };
+};
+
 // Get zone name for display purposes
 export const getZoneName = (score) => {
   switch (score) {
@@ -491,6 +564,56 @@ export const testOutsideTargetShots = () => {
       blue: ringRadii.blueInnerRadius?.toFixed(1)
     }
   });
+};
+
+// Test function for custom distance ring scaling
+export const testCustomDistanceRingScaling = () => {
+  console.log('🎯 Testing Custom Distance Ring Scaling');
+
+  // Test distances to verify inverse relationship
+  const testDistances = [10, 25, 50, 75, 100, 150, 200, 300, 500];
+
+  console.log('Distance (m) | Diameter (mm) | Green Ring (px) | Orange Ring (px) | Blue Ring (px)');
+  console.log('------------|---------------|-----------------|------------------|----------------');
+
+  testDistances.forEach(distance => {
+    const virtualTemplate = createTemplateFromDistance(distance);
+    if (virtualTemplate) {
+      const ringRadii = calculateRingRadii(virtualTemplate, 30); // Use ESA=30 for consistency
+
+      console.log(
+        `${distance.toString().padStart(11)} | ` +
+        `${virtualTemplate.diameter.toFixed(1).padStart(13)} | ` +
+        `${ringRadii.greenBullseyeRadius.toFixed(1).padStart(15)} | ` +
+        `${ringRadii.orangeESARadius.toFixed(1).padStart(16)} | ` +
+        `${ringRadii.blueInnerRadius.toFixed(1).padStart(14)}`
+      );
+    }
+  });
+
+  console.log('\n🎯 Verification: Larger distances should show smaller ring sizes (inverse relationship)');
+
+  // Test specific examples
+  const template10m = createTemplateFromDistance(10);
+  const template300m = createTemplateFromDistance(300);
+
+  const rings10m = calculateRingRadii(template10m, 30);
+  const rings300m = calculateRingRadii(template300m, 30);
+
+  console.log('\n🎯 Comparison Test:');
+  console.log(`10m rings:  Green=${rings10m.greenBullseyeRadius.toFixed(1)}px, Orange=${rings10m.orangeESARadius.toFixed(1)}px, Blue=${rings10m.blueInnerRadius.toFixed(1)}px`);
+  console.log(`300m rings: Green=${rings300m.greenBullseyeRadius.toFixed(1)}px, Orange=${rings300m.orangeESARadius.toFixed(1)}px, Blue=${rings300m.blueInnerRadius.toFixed(1)}px`);
+  console.log(`✅ 10m rings are ${(rings10m.greenBullseyeRadius / rings300m.greenBullseyeRadius).toFixed(1)}x larger than 300m rings`);
+};
+
+// Additional test function for comprehensive shot scoring
+export const testComprehensiveShotScoring = () => {
+  console.log('🎯 Testing Comprehensive Shot Scoring');
+
+  const bullseyePosition = { x: 200, y: 200 }; // Center bullseye
+  const template = { name: '50M', diameter: 110 }; // 50M template
+  const esaParameter = 30; // ESA value
+  const ringRadii = calculateRingRadii(template, esaParameter);
 
   // Test shots including some outside the green ring
   const testShots = [
@@ -549,6 +672,10 @@ if (typeof window !== 'undefined') {
   window.testScoringLogic = testScoringLogic;
   window.testTimedModeIssue = testTimedModeIssue;
   window.testOutsideTargetShots = testOutsideTargetShots;
+  window.testCustomDistanceRingScaling = testCustomDistanceRingScaling;
+  window.testComprehensiveShotScoring = testComprehensiveShotScoring;
   window.calculateZoneScore = calculateZoneScore;
   window.calculateRingRadii = calculateRingRadii;
+  window.calculateDiameterFromDistance = calculateDiameterFromDistance;
+  window.createTemplateFromDistance = createTemplateFromDistance;
 }

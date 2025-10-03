@@ -99,8 +99,16 @@ const SessionDetailsPage = () => {
     return 'N/A';
   };
 
-  // Helper function to get target distance from TARGET_TEMPLATES
+  // Helper function to get target distance from TARGET_TEMPLATES or custom distance
   const getTargetDistanceFromTemplate = () => {
+    // Check for custom distance first
+    if (sessionData?.parameters?.useCustomDistance && sessionData?.parameters?.customDistance) {
+      const customDistance = parseFloat(sessionData.parameters.customDistance);
+      if (!isNaN(customDistance) && customDistance > 0) {
+        return `${customDistance}m (Custom)`;
+      }
+    }
+
     // First, try to get template_id from parameters
     const templateId = sessionData?.parameters?.template_id;
     if (templateId) {

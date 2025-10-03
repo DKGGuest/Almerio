@@ -867,7 +867,18 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
   const handleParametersUpdate = useCallback(async (laneId, parameters) => {
     // Map selected templateId from parameters to actual template object for this lane
     let template = null;
-    if (parameters && parameters.templateId) {
+
+    // Check for custom distance first
+    if (parameters && parameters.useCustomDistance && parameters.customDistance) {
+      const customDistance = parseFloat(parameters.customDistance);
+      if (!isNaN(customDistance) && customDistance > 0) {
+        // Import the function to create template from distance
+        const { createTemplateFromDistance } = await import('../constants/shootingParameters');
+        template = createTemplateFromDistance(customDistance, `custom-${laneId}-${customDistance}m`);
+      }
+    }
+    // Fallback to template selection if no custom distance
+    else if (parameters && parameters.templateId) {
       const match = (typeof parameters.templateId === 'string') ? parameters.templateId : '';
       template = (TARGET_TEMPLATES || []).find(t => t.id === match) || null;
     }
