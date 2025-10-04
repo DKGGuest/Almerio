@@ -552,6 +552,17 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
   const [analyticsData, setAnalyticsData] = useState({});
   // Track last auto-saved final report signature per session to avoid duplicate writes
   const finalReportSigRef = useRef({});
+
+  // Shot queue for batching database saves
+  const shotQueueRef = useRef([]);
+  const shotQueueTimeoutRef = useRef(null);
+  const isProcessingQueueRef = useRef(false);
+  const retryQueueRef = useRef([]);
+  const maxRetries = 3;
+
+  // Shot tracking for comprehensive logging
+  const shotCounterRef = useRef(0);
+  const activeShotsRef = useRef(new Map()); // Track shots by ID through lifecycle
   // Track screen size for responsive design
   const [screenSize, setScreenSize] = useState({
     width: window.innerWidth,
@@ -624,6 +635,57 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
   // Handle analytics data updates
   const handleAnalyticsUpdate = useCallback(async (data) => {
     setAnalyticsData(prev => ({ ...prev, [activeLaneId]: data }));
+
+    // CRITICAL FIX: Re-score any shots that were deferred due to missing visualRingRadii
+    if (data?.visualRingRadii) {
+      const lane = lanes[activeLaneId];
+      const shotsNeedingRescoring = lane?.hits?.filter(hit => hit.needsRescoring) || [];
+
+      if (shotsNeedingRescoring.length > 0) {
+        console.log(`🔄 Re-scoring ${shotsNeedingRescoring.length} deferred shots with visualRingRadii:`, {
+          visualRingRadii: {
+            green: data.visualRingRadii.greenBullseyeRadius?.toFixed(1),
+            orange: data.visualRingRadii.orangeESARadius?.toFixed(1),
+            blue: data.visualRingRadii.blueInnerRadius?.toFixed(1)
+          }
+        });
+
+        const refPoint = lane?.bullseye ? lane.bullseye : { x: 200, y: 200 };
+        const updatedHits = lane.hits.map(hit => {
+          if (hit.needsRescoring) {
+            const newScore = calculateZoneScore(hit, refPoint, data.visualRingRadii);
+            console.log(`✅ Re-scored shot (${hit.x}, ${hit.y}): ${hit.score} → ${newScore} pts`);
+            return { ...hit, score: newScore, needsRescoring: false };
+          }
+          return hit;
+        });
+
+        updateLane(activeLaneId, { hits: updatedHits, message: '🎯 Shots Re-scored' });
+
+        // Save the re-scored shots to database
+        const rescoredShots = shotsNeedingRescoring.map((shot, index) => {
+          const newScore = calculateZoneScore(shot, refPoint, data.visualRingRadii);
+          return {
+            shotNumber: lane.hits.indexOf(shot) + 1,
+            x: shot.x,
+            y: shot.y,
+            timestamp: shot.timestamp || Date.now(),
+            score: newScore,
+            isBullseye: !!shot.isBullseye
+          };
+        });
+
+        if (rescoredShots.length > 0 && lane?.sessionId) {
+          try {
+            const { saveShots } = await import('../services/api');
+            await saveShots(lane.sessionId, rescoredShots);
+            console.log(`✅ Saved ${rescoredShots.length} re-scored shots to database`);
+          } catch (error) {
+            console.error('❌ Failed to save re-scored shots:', error);
+          }
+        }
+      }
+    }
 
     // Persist calculated analytics when showResults is true or phase DONE
     try {
@@ -770,8 +832,282 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
     }
   }, [activeLaneId, lanes]);
 
-  // Handle adding hits
-  const handleAddHit = useCallback(async (hit) => {
+  // Shot lifecycle logging functions
+  const logShotLifecycle = useCallback((shotId, stage, data = {}) => {
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+      shotId,
+      stage,
+      timestamp,
+      ...data
+    };
+
+    console.log(`🎯 [SHOT-${shotId}] ${stage}:`, logEntry);
+
+    // Update active shots tracking
+    if (activeShotsRef.current.has(shotId)) {
+      const shotData = activeShotsRef.current.get(shotId);
+      shotData.lifecycle.push(logEntry);
+      shotData.lastStage = stage;
+      shotData.lastUpdate = timestamp;
+    }
+  }, []);
+
+  const createShotId = useCallback(() => {
+    shotCounterRef.current += 1;
+    return `shot-${Date.now()}-${shotCounterRef.current}`;
+  }, []);
+
+  const trackShot = useCallback((shotId, initialData) => {
+    activeShotsRef.current.set(shotId, {
+      id: shotId,
+      createdAt: new Date().toISOString(),
+      lifecycle: [],
+      lastStage: 'CREATED',
+      lastUpdate: new Date().toISOString(),
+      ...initialData
+    });
+    logShotLifecycle(shotId, 'CREATED', initialData);
+  }, [logShotLifecycle]);
+
+  // Process shot queue in batches for better performance
+  const processShotQueue = useCallback(async () => {
+    if (isProcessingQueueRef.current || shotQueueRef.current.length === 0) {
+      return;
+    }
+
+    isProcessingQueueRef.current = true;
+
+    // FIXED: Don't clear queue immediately - only take what we need
+    const shotsToProcess = shotQueueRef.current.splice(0, shotQueueRef.current.length);
+
+    try {
+      console.log(`🔄 Processing ${shotsToProcess.length} shots from queue...`);
+
+      // Log each shot entering processing
+      shotsToProcess.forEach(shot => {
+        if (shot.shotId) {
+          logShotLifecycle(shot.shotId, 'PROCESSING', {
+            queuePosition: shotsToProcess.indexOf(shot),
+            queuedFor: Date.now() - shot.queuedAt
+          });
+        }
+      });
+
+      // Group shots by session ID for batch processing
+      const shotsBySession = shotsToProcess.reduce((acc, shot) => {
+        if (!acc[shot.sessionId]) {
+          acc[shot.sessionId] = [];
+        }
+        acc[shot.sessionId].push(shot);
+        return acc;
+      }, {});
+
+      // Process each session's shots in batch
+      for (const [sessionId, shots] of Object.entries(shotsBySession)) {
+        try {
+          const { saveShots, getSessionDetails } = await import('../services/api');
+
+          // Get current shot count for proper numbering
+          let baseshotNumber = 1;
+          try {
+            const sessionDetails = await getSessionDetails(sessionId);
+            const existingShots = sessionDetails?.shots || [];
+            baseshotNumber = existingShots.length + 1;
+          } catch (e) {
+            console.warn('Could not get shot count, using fallback numbering');
+          }
+
+          // Prepare shot data with sequential numbering
+          const shotDataArray = shots.map((shot, index) => ({
+            shotNumber: baseshotNumber + index,
+            x: shot.scoredHit.x,
+            y: shot.scoredHit.y,
+            timestamp: shot.scoredHit.timestamp || Date.now(),
+            score: shot.scoredHit.score || 0,
+            isBullseye: !!shot.scoredHit.isBullseye,
+            timePhase: (shot.scoredHit.timePhase && ['COUNTDOWN', 'WINDOW', 'OVERTIME'].includes(shot.scoredHit.timePhase))
+              ? shot.scoredHit.timePhase
+              : null
+          }));
+
+          console.log(`📤 Batch saving ${shotDataArray.length} shots for session ${sessionId}`);
+          console.log('💾 Shot scores being saved to database:', shotDataArray.map(shot => ({
+            shotNumber: shot.shotNumber,
+            coordinates: `(${shot.x}, ${shot.y})`,
+            score: shot.score
+          })));
+
+          // Log each shot entering save operation
+          shots.forEach(shot => {
+            if (shot.shotId) {
+              logShotLifecycle(shot.shotId, 'SAVING', {
+                sessionId,
+                batchSize: shotDataArray.length,
+                shotNumber: shotDataArray.find(s => s.x === shot.scoredHit.x && s.y === shot.scoredHit.y)?.shotNumber
+              });
+            }
+          });
+
+          const result = await saveShots(sessionId, shotDataArray);
+          console.log(`✅ Batch saved ${shotDataArray.length} shots successfully`);
+
+          // Log successful saves
+          shots.forEach(shot => {
+            if (shot.shotId) {
+              logShotLifecycle(shot.shotId, 'SAVED', {
+                sessionId,
+                result: 'success'
+              });
+              // Remove from active tracking after successful save
+              activeShotsRef.current.delete(shot.shotId);
+            }
+          });
+        } catch (e) {
+          console.error(`❌ Failed to batch save shots for session ${sessionId}:`, e);
+
+          // Add failed shots to retry queue with retry count
+          shots.forEach(shot => {
+            const retryCount = (shot.retryCount || 0) + 1;
+
+            if (shot.shotId) {
+              logShotLifecycle(shot.shotId, 'SAVE_FAILED', {
+                sessionId,
+                error: e.message,
+                retryCount,
+                willRetry: retryCount <= maxRetries
+              });
+            }
+
+            if (retryCount <= maxRetries) {
+              retryQueueRef.current.push({
+                ...shot,
+                retryCount,
+                lastRetryAt: Date.now()
+              });
+              console.log(`🔄 Queued shot ${shot.shotId || 'unknown'} for retry ${retryCount}/${maxRetries}`);
+            } else {
+              console.error(`💀 Shot ${shot.shotId || 'unknown'} permanently failed after ${maxRetries} retries:`, shot);
+
+              if (shot.shotId) {
+                logShotLifecycle(shot.shotId, 'PERMANENTLY_FAILED', {
+                  sessionId,
+                  finalError: e.message,
+                  retriesAttempted: maxRetries
+                });
+                // Keep in tracking for debugging but mark as failed
+                const shotData = activeShotsRef.current.get(shot.shotId);
+                if (shotData) {
+                  shotData.permanentlyFailed = true;
+                }
+              }
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.error('❌ Error processing shot queue:', e);
+    } finally {
+      isProcessingQueueRef.current = false;
+
+      // Process retry queue - add eligible retries back to main queue
+      const now = Date.now();
+      const retryDelay = 2000; // 2 seconds between retries
+      const eligibleRetries = retryQueueRef.current.filter(shot =>
+        now - shot.lastRetryAt >= retryDelay
+      );
+
+      if (eligibleRetries.length > 0) {
+        console.log(`🔄 Moving ${eligibleRetries.length} shots from retry queue to main queue`);
+        shotQueueRef.current.push(...eligibleRetries);
+        retryQueueRef.current = retryQueueRef.current.filter(shot =>
+          !eligibleRetries.includes(shot)
+        );
+      }
+
+      // If there are still shots in queue or retries pending, schedule another processing
+      if (shotQueueRef.current.length > 0 || retryQueueRef.current.length > 0) {
+        const delay = shotQueueRef.current.length > 0 ? 1000 : retryDelay;
+        shotQueueTimeoutRef.current = setTimeout(processShotQueue, delay);
+      }
+    }
+  }, []);
+
+  // Queue shot for batch processing - non-blocking and reliable
+  const saveShotToDatabase = useCallback((sessionId, scoredHit, fallbackShotNumber) => {
+    const shotId = createShotId();
+
+    console.log('📥 Queuing shot for batch save...', {
+      shotId,
+      sessionId,
+      x: scoredHit.x,
+      y: scoredHit.y,
+      score: scoredHit.score
+    });
+
+    // Track shot creation
+    trackShot(shotId, {
+      sessionId,
+      coordinates: { x: scoredHit.x, y: scoredHit.y },
+      score: scoredHit.score,
+      fallbackShotNumber
+    });
+
+    // Add shot to queue with unique ID
+    const shotData = {
+      shotId,
+      sessionId,
+      scoredHit,
+      fallbackShotNumber,
+      queuedAt: Date.now()
+    };
+
+    shotQueueRef.current.push(shotData);
+    logShotLifecycle(shotId, 'QUEUED', {
+      queueLength: shotQueueRef.current.length,
+      sessionId
+    });
+
+    // IMPROVED: More aggressive processing with shorter delays
+    if (shotQueueTimeoutRef.current) {
+      clearTimeout(shotQueueTimeoutRef.current);
+    }
+
+    // Reduce delay for faster processing, but still allow some batching
+    const delay = shotQueueRef.current.length >= 5 ? 100 : 150; // Faster for larger batches
+    shotQueueTimeoutRef.current = setTimeout(processShotQueue, delay);
+
+    console.log(`⏰ Scheduled queue processing in ${delay}ms (queue size: ${shotQueueRef.current.length})`);
+  }, [processShotQueue, createShotId, trackShot, logShotLifecycle]);
+
+  // Monitor shot queue status for debugging
+  const reportQueueStatus = useCallback(() => {
+    const activeShots = Array.from(activeShotsRef.current.values());
+    const queuedShots = shotQueueRef.current.length;
+    const retryShots = retryQueueRef.current.length;
+    const processingShots = activeShots.filter(s => s.lastStage === 'PROCESSING').length;
+    const failedShots = activeShots.filter(s => s.permanentlyFailed).length;
+
+    console.log('📊 SHOT QUEUE STATUS:', {
+      totalTracked: activeShots.length,
+      inQueue: queuedShots,
+      inRetryQueue: retryShots,
+      processing: processingShots,
+      permanentlyFailed: failedShots,
+      isProcessing: isProcessingQueueRef.current
+    });
+
+    return {
+      totalTracked: activeShots.length,
+      inQueue: queuedShots,
+      inRetryQueue: retryShots,
+      processing: processingShots,
+      failed: failedShots
+    };
+  }, []);
+
+  // Handle adding hits with immediate UI update and async database save
+  const handleAddHit = useCallback((hit) => {
     // Handle reset signal from TargetDisplay
     if (hit && hit.type === 'RESET') {
       updateLane(activeLaneId, {
@@ -790,70 +1126,102 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
 
     const lane = lanes[activeLaneId];
 
-    // Compute per-hit score using zone-based scoring system
-    const refPoint = lane?.bullseye ? lane.bullseye : { x: 200, y: 200 };
+    // Check if this is a Snap mode shot and if target is currently hidden
+    const isSnapMode = lane?.parameters?.firingMode === 'snap';
+    const isTargetHidden = hit?.snapState === 'HIDE'; // TargetDisplay will pass snapState in hit data
 
-    // Create a template object if we don't have one, using a fallback diameter
-    const effectiveTemplate = lane?.template || { diameter: 150 }; // 150mm = 50px radius fallback (consistent with TargetDisplay)
-    const esaParameter = lane?.parameters?.esa || null;
-    const ringRadii = calculateRingRadii(effectiveTemplate, esaParameter);
+    let scoreForHit = 0;
 
-    const scoreForHit = calculateZoneScore(hit, refPoint, ringRadii);
+    if (isSnapMode && isTargetHidden) {
+      // In Snap mode, shots fired while target is hidden receive 0 points
+      scoreForHit = 0;
+      console.log('🎯 Snap mode shot fired while target hidden - assigning 0 points', {
+        snapState: hit?.snapState,
+        coordinates: { x: hit.x, y: hit.y }
+      });
+    } else {
+      // Normal scoring: compute per-hit score using zone-based scoring system
+      const refPoint = lane?.bullseye ? lane.bullseye : { x: 200, y: 200 };
+
+      // CRITICAL FIX: Always wait for visualRingRadii before scoring shots
+      // This prevents scoring inconsistencies between live display and stored scores
+      let ringRadii;
+      if (analyticsData[activeLaneId]?.visualRingRadii) {
+        ringRadii = analyticsData[activeLaneId].visualRingRadii;
+        console.log('✅ AdminDashboard - Using visualRingRadii for scoring:', {
+          shotCoords: `(${hit.x}, ${hit.y})`,
+          greenRadius: ringRadii.greenBullseyeRadius?.toFixed(1),
+          orangeRadius: ringRadii.orangeESARadius?.toFixed(1),
+          blueRadius: ringRadii.blueInnerRadius?.toFixed(1)
+        });
+      } else {
+        // CRITICAL: If visualRingRadii are not available, defer shot scoring
+        // This prevents incorrect scores from being saved to the database
+        console.warn('⚠️ AdminDashboard - visualRingRadii not available, deferring shot scoring:', {
+          shotCoords: `(${hit.x}, ${hit.y})`,
+          activeLaneId,
+          hasAnalyticsData: !!analyticsData[activeLaneId],
+          analyticsKeys: Object.keys(analyticsData[activeLaneId] || {})
+        });
+
+        // Store the shot with a temporary score of 0 and mark it for re-scoring
+        // The TargetDisplay will trigger analytics update with visualRingRadii soon
+        scoreForHit = 0;
+        console.log('🔄 Shot will be re-scored when visualRingRadii become available');
+
+        // Skip the normal scoring logic and use the temporary score
+        const scoredHit = { ...hit, score: 0, needsRescoring: true };
+        const newHits = [...lane.hits, scoredHit];
+        updateLane(activeLaneId, { hits: newHits, message: '🎯 Hit Registered (Pending Score)' });
+        return; // Exit early to prevent saving incorrect score
+      }
+
+      scoreForHit = calculateZoneScore(hit, refPoint, ringRadii);
+
+      console.log('🎯 AdminDashboard - Shot scoring result:', {
+        shotCoords: `(${hit.x}, ${hit.y})`,
+        referencePoint: `(${refPoint.x}, ${refPoint.y})`,
+        calculatedScore: scoreForHit,
+        usingVisualRingRadii: !!analyticsData[activeLaneId]?.visualRingRadii
+      });
+
+      if (isSnapMode) {
+        console.log('🎯 Snap mode shot fired while target visible - normal scoring', {
+          snapState: hit?.snapState,
+          coordinates: { x: hit.x, y: hit.y },
+          score: scoreForHit
+        });
+      }
+    }
 
     const scoredHit = { ...hit, score: Number.isFinite(scoreForHit) ? scoreForHit : 0 };
 
     const newHits = [...lane.hits, scoredHit];
+
+    // IMMEDIATE UI UPDATE - No blocking
     updateLane(activeLaneId, { hits: newHits, message: '🎯 Hit Registered' });
 
-    // Persist shot to backend with proper shot number calculation
-    try {
-      if (lane?.sessionId && scoredHit && !scoredHit.isBullseye) {
-        console.log('💾 Saving shot to database...', {
-          sessionId: lane.sessionId,
-          x: scoredHit.x,
-          y: scoredHit.y,
-          score: scoredHit.score
-        });
+    // ASYNC DATABASE SAVE - Non-blocking, runs in background
+    if (lane?.sessionId && scoredHit && !scoredHit.isBullseye) {
+      console.log('🎯 Shot hit registered, queuing for database save...', {
+        sessionId: lane.sessionId,
+        coordinates: { x: scoredHit.x, y: scoredHit.y },
+        score: scoredHit.score,
+        timestamp: scoredHit.timestamp,
+        shotNumber: newHits.length
+      });
 
-        const { saveShots, getSessionDetails } = await import('../services/api');
-
-        // Get current shot count from database to ensure proper shot numbering
-        let shotNumber = newHits.length; // Default fallback
-        try {
-          const sessionDetails = await getSessionDetails(lane.sessionId);
-          const existingShots = sessionDetails?.shots || [];
-          shotNumber = existingShots.length + 1; // Next shot number based on database
-          console.log(`📊 Current shots in DB: ${existingShots.length}, next shot number: ${shotNumber}`);
-        } catch (shotCountError) {
-          console.warn('Could not get shot count from database, using lane count:', shotCountError.message);
-        }
-
-        const shotData = {
-          shotNumber: shotNumber,
-          x: scoredHit.x,
-          y: scoredHit.y,
-          timestamp: scoredHit.timestamp || Date.now(),
-          score: scoredHit.score || 0,
-          isBullseye: !!scoredHit.isBullseye,
-          timePhase: (scoredHit.timePhase && ['COUNTDOWN', 'WINDOW', 'OVERTIME'].includes(scoredHit.timePhase))
-            ? scoredHit.timePhase
-            : null
-        };
-
-        console.log('📤 Sending shot data:', shotData);
-        const result = await saveShots(lane.sessionId, [shotData]);
-        console.log('✅ Shot saved successfully:', result);
-      } else {
-        console.log('⏭️ Skipping shot save:', {
-          hasSessionId: !!lane?.sessionId,
-          hasScoredHit: !!scoredHit,
-          isBullseye: scoredHit?.isBullseye,
-          reason: !lane?.sessionId ? 'No session ID' : scoredHit?.isBullseye ? 'Is bullseye' : 'Unknown'
-        });
-      }
-    } catch (e) {
-      console.error('❌ Failed to save shot:', e);
-      console.error('Error details:', e.message, e.stack);
+      // Queue the database save asynchronously without blocking UI
+      saveShotToDatabase(lane.sessionId, scoredHit, newHits.length);
+    } else {
+      console.log('⏭️ Skipping database save:', {
+        hasSessionId: !!lane?.sessionId,
+        hasScoredHit: !!scoredHit,
+        isBullseye: scoredHit?.isBullseye,
+        reason: !lane?.sessionId ? 'No session ID' :
+                scoredHit?.isBullseye ? 'Is bullseye' :
+                !scoredHit ? 'No scored hit' : 'Unknown'
+      });
     }
 
     if (newHits.length >= 3) {
@@ -863,14 +1231,50 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
     }
   }, [activeLaneId, lanes, updateLane]);
 
+  // Cleanup shot queue on unmount
+  useEffect(() => {
+    return () => {
+      if (shotQueueTimeoutRef.current) {
+        clearTimeout(shotQueueTimeoutRef.current);
+      }
+      // Process any remaining shots before unmounting
+      if (shotQueueRef.current.length > 0) {
+        console.log('🧹 Processing remaining shots before unmount...');
+        processShotQueue();
+      }
+    };
+  }, [processShotQueue]);
+
+  // Helper function to map database field names to frontend field names
+  const mapDatabaseFieldsToFrontend = (params) => {
+    if (!params) return params;
+
+    const mapped = { ...params };
+
+    // Map snake_case database fields to camelCase frontend fields
+    if (params.use_custom_distance !== undefined) {
+      mapped.useCustomDistance = params.use_custom_distance;
+      delete mapped.use_custom_distance;
+    }
+    if (params.custom_distance !== undefined) {
+      mapped.customDistance = params.custom_distance;
+      delete mapped.custom_distance;
+    }
+
+    return mapped;
+  };
+
   // Handle parameters update
   const handleParametersUpdate = useCallback(async (laneId, parameters) => {
+    // Map database fields to frontend fields if needed
+    const mappedParameters = mapDatabaseFieldsToFrontend(parameters);
+
     // Map selected templateId from parameters to actual template object for this lane
     let template = null;
 
     // Check for custom distance first
-    if (parameters && parameters.useCustomDistance && parameters.customDistance) {
-      const customDistance = parseFloat(parameters.customDistance);
+    if (mappedParameters && mappedParameters.useCustomDistance && mappedParameters.customDistance) {
+      const customDistance = parseFloat(mappedParameters.customDistance);
       if (!isNaN(customDistance) && customDistance > 0) {
         // Import the function to create template from distance
         const { createTemplateFromDistance } = await import('../constants/shootingParameters');
@@ -878,14 +1282,14 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
       }
     }
     // Fallback to template selection if no custom distance
-    else if (parameters && parameters.templateId) {
-      const match = (typeof parameters.templateId === 'string') ? parameters.templateId : '';
+    else if (mappedParameters && mappedParameters.templateId) {
+      const match = (typeof mappedParameters.templateId === 'string') ? mappedParameters.templateId : '';
       template = (TARGET_TEMPLATES || []).find(t => t.id === match) || null;
     }
 
     // Merge with existing to preserve run-once flags; default hasRun=false if not provided
     const existing = lanes[laneId]?.parameters || {};
-    const mergedParams = { ...existing, ...parameters };
+    const mergedParams = { ...existing, ...mappedParameters };
     if (typeof mergedParams.hasRun === 'undefined') mergedParams.hasRun = false;
 
     updateLane(laneId, { parameters: mergedParams, template, message: template ? '🔒 Target Locked' : '⚙️ Parameters Set' });
@@ -1446,6 +1850,7 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
                     laneId={activeLaneId}
                     sessionType={activeLane.parameters?.sessionType}
                     shootingParameters={activeLane.parameters}
+                    visualRingRadii={analyticsData[activeLaneId]?.visualRingRadii}
                     onSaveReport={async (report) => {
                       try {
                         const lane = lanes[activeLaneId];

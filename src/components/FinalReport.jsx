@@ -2,7 +2,7 @@ import { useMemo, memo, useRef, useEffect } from 'react';
 import { calculateZoneScore, calculateRingRadii } from '../constants/shootingParameters';
 import { getPerformanceRemark } from '../utils/performanceRemarks';
 
-const FinalReport = memo(({ shooter, hits = [], bullseye = null, template = null, laneId = null, onSaveReport = null, sessionType = null, shootingParameters = null }) => {
+const FinalReport = memo(({ shooter, hits = [], bullseye = null, template = null, laneId = null, onSaveReport = null, sessionType = null, shootingParameters = null, visualRingRadii = null }) => {
   // Ref to track if report has been saved to prevent duplicates
   const reportSavedRef = useRef(false);
 
@@ -119,12 +119,31 @@ const FinalReport = memo(({ shooter, hits = [], bullseye = null, template = null
 
   // Calculate zone-based score for a single hit
   const getHitScore = (hit) => {
+    // For SNAP mode, use the database score to preserve 0-point scoring for HIDE phase shots
+    // For other modes, recalculate to ensure consistency with current template and parameters
+    if (shootingParameters?.firingMode === 'snap' && hit.score !== undefined) {
+      // Use the pre-calculated score from the database for Snap mode
+      // This preserves the correct 0-point scoring for shots fired during HIDE phase
+      return hit.score;
+    }
+
+    // ALWAYS recalculate score to ensure consistency with current template and parameters
+    // This fixes the TIMED mode scoring issue where pre-calculated scores from the database
+    // were inconsistent with the visual ring radii used during shooting
+
+    // Compute zone-based score using current template and parameters
     const referencePoint = bullseye || getTargetCenter();
 
-    // Create a template object if we don't have one, using a fallback diameter
-    const effectiveTemplate = template || { diameter: 150 }; // 150mm = 50px radius fallback (consistent with TargetDisplay)
-    const esaParameter = shootingParameters?.esa || null;
-    const ringRadii = calculateRingRadii(effectiveTemplate, esaParameter);
+    // Use visual ring radii if provided (from TargetDisplay), otherwise calculate
+    let ringRadii;
+    if (visualRingRadii) {
+      ringRadii = visualRingRadii;
+    } else {
+      // Create a template object if we don't have one, using a fallback diameter
+      const effectiveTemplate = template || { diameter: 150 }; // 150mm = 50px radius fallback (consistent with TargetDisplay)
+      const esaParameter = shootingParameters?.esa || null;
+      ringRadii = calculateRingRadii(effectiveTemplate, esaParameter);
+    }
 
     return calculateZoneScore(hit, referencePoint, ringRadii);
   };
@@ -135,7 +154,7 @@ const FinalReport = memo(({ shooter, hits = [], bullseye = null, template = null
   };
 
   const stats = useMemo(() => calculateMPIAndAccuracy(), [actualShots, bullseye, template]);
-  const totalScore = useMemo(() => getTotalScore(), [actualShots, template, bullseye]);
+  const totalScore = useMemo(() => getTotalScore(), [actualShots, template, bullseye, visualRingRadii]);
 
   const performanceRemark = useMemo(() => getPerformanceRemark(stats.accuracy, sessionType), [stats.accuracy, sessionType]);
 

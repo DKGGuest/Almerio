@@ -172,7 +172,8 @@ app.get('/api/shooters/:id', async (req, res) => {
                    sp.target_type, sp.shooting_position, sp.shot_type, sp.number_of_rounds, sp.esa,
                    sp.time_limit, sp.rounds, sp.zeroing_distance, sp.template_id, sp.template_diameter,
                    sp.wind_direction, sp.wind_speed, sp.moving_direction, sp.moving_speed,
-                   sp.snap_display_time, sp.snap_disappear_time, sp.snap_cycles, sp.snap_start_behavior, sp.notes as param_notes,
+                   sp.snap_display_time, sp.snap_disappear_time, sp.snap_cycles, sp.snap_start_behavior,
+                   sp.use_custom_distance, sp.custom_distance, sp.notes as param_notes,
                    pa_ranked.accuracy_percentage, pa_ranked.mpi_distance, pa_ranked.shots_analyzed, pa_ranked.group_size, pa_ranked.max_distance,
                    fr_ranked.total_score, fr_ranked.performance_rating
             FROM shooting_sessions ss
@@ -181,7 +182,8 @@ app.get('/api/shooters/:id', async (req, res) => {
                        target_type, shooting_position, shot_type, number_of_rounds, esa,
                        time_limit, rounds, zeroing_distance, template_id, template_diameter,
                        wind_direction, wind_speed, moving_direction, moving_speed,
-                       snap_display_time, snap_disappear_time, snap_cycles, snap_start_behavior, notes,
+                       snap_display_time, snap_disappear_time, snap_cycles, snap_start_behavior,
+                       use_custom_distance, custom_distance, notes,
                        ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY created_at DESC) as rn
                 FROM shooting_parameters
             ) sp ON ss.id = sp.session_id AND sp.rn = 1
@@ -234,7 +236,8 @@ app.get('/api/shooters/id/:id', async (req, res) => {
                    sp.target_type, sp.shooting_position, sp.shot_type, sp.number_of_rounds, sp.esa,
                    sp.time_limit, sp.rounds, sp.zeroing_distance, sp.template_id, sp.template_diameter,
                    sp.wind_direction, sp.wind_speed, sp.moving_direction, sp.moving_speed,
-                   sp.snap_display_time, sp.snap_disappear_time, sp.snap_cycles, sp.snap_start_behavior, sp.notes as param_notes,
+                   sp.snap_display_time, sp.snap_disappear_time, sp.snap_cycles, sp.snap_start_behavior,
+                   sp.use_custom_distance, sp.custom_distance, sp.notes as param_notes,
                    pa.accuracy_percentage, pa.mpi_distance, pa.shots_analyzed,
                    fr.total_score, fr.performance_rating, fr.performance_emoji
             FROM shooting_sessions ss
@@ -496,9 +499,21 @@ app.post('/api/sessions/:id/parameters', async (req, res) => {
         // Delete existing parameters for this session
         await db.delete('shooting_parameters', 'session_id = ?', [sessionId]);
 
-        // Extract target distance from template ID if not explicitly provided
+        // Handle custom distance vs template distance
         let targetDistance = parameters.targetDistance;
-        if (!targetDistance && parameters.templateId) {
+
+
+
+        // Check if using custom distance
+        if (parameters.useCustomDistance && parameters.customDistance) {
+            const customDistance = parseFloat(parameters.customDistance);
+            if (!isNaN(customDistance) && customDistance > 0) {
+                targetDistance = customDistance;
+                console.log(`🎯 Using custom target distance: ${targetDistance}m`);
+            }
+        }
+        // Extract target distance from template ID if not explicitly provided and not using custom distance
+        else if (!targetDistance && parameters.templateId) {
             // Extract distance from template ID (e.g., "air-pistol-10m" -> 10)
             const distanceMatch = parameters.templateId.match(/(\d+)m/);
             if (distanceMatch) {
@@ -533,6 +548,8 @@ app.post('/api/sessions/:id/parameters', async (req, res) => {
             snap_disappear_time: parameters.snapDisappearTime || null,
             snap_cycles: parameters.snapCycles || null,
             snap_start_behavior: parameters.snapStartBehavior || null,
+            use_custom_distance: parameters.useCustomDistance || false,
+            custom_distance: parameters.customDistance ? parseFloat(parameters.customDistance) : null,
             notes: parameters.notes || null
         });
 
@@ -783,7 +800,8 @@ app.get('/api/shooters/:name/history', async (req, res) => {
                    sp.target_type, sp.shooting_position, sp.shot_type, sp.number_of_rounds, sp.esa,
                    sp.time_limit, sp.rounds, sp.zeroing_distance, sp.template_id, sp.template_diameter,
                    sp.wind_direction, sp.wind_speed, sp.moving_direction, sp.moving_speed,
-                   sp.snap_display_time, sp.snap_disappear_time, sp.snap_cycles, sp.snap_start_behavior, sp.notes as param_notes,
+                   sp.snap_display_time, sp.snap_disappear_time, sp.snap_cycles, sp.snap_start_behavior,
+                   sp.use_custom_distance, sp.custom_distance, sp.notes as param_notes,
                    pa.accuracy_percentage, pa.mpi_distance, pa.shots_analyzed,
                    fr.total_score, fr.performance_rating, fr.performance_emoji
             FROM shooting_sessions ss

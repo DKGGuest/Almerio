@@ -300,6 +300,8 @@ async function createTables(db) {
             snap_disappear_time INT NULL,
             snap_cycles INT NULL,
             snap_start_behavior ENUM('appear','disappear') NULL,
+            use_custom_distance BOOLEAN DEFAULT FALSE COMMENT 'Whether custom distance is used instead of template',
+            custom_distance DECIMAL(10,2) NULL COMMENT 'Custom distance value in meters',
             notes TEXT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (session_id) REFERENCES shooting_sessions(id) ON DELETE CASCADE,

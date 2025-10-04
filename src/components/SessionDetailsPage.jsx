@@ -8,9 +8,12 @@ import {
   getWeaponTypeLabel,
   getTargetTypeLabel,
   getShootingPositionLabel,
-  getShotTypeLabel
+  getShotTypeLabel,
+  calculateZoneScore,
+  calculateRingRadii
 } from '../constants/shootingParameters';
 import { TARGET_TEMPLATES } from '../components/TargetTemplateSelector';
+import TargetVisualization from './TargetVisualization';
 
 const SessionDetailsPage = () => {
   const { sessionId } = useParams();
@@ -18,6 +21,58 @@ const SessionDetailsPage = () => {
   const [sessionData, setSessionData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Get target center coordinates (400x400 target with center at 200,200)
+  const getTargetCenter = () => {
+    return { x: 200, y: 200 }; // Center of 400x400 target
+  };
+
+  // Calculate correct score for a shot with intelligent fallback logic
+  const getCorrectHitScore = (shot, sessionData) => {
+    // Debug logging to track scoring flow
+    console.log('🎯 SessionDetails - getCorrectHitScore:', {
+      shotNumber: shot.shot_number,
+      coordinates: `(${shot.x_coordinate}, ${shot.y_coordinate})`,
+      storedScore: shot.score_points,
+      hasStoredScore: shot.score_points !== undefined && shot.score_points !== null
+    });
+
+    // For historical sessions, prefer stored scores since they were calculated
+    // with the correct visualRingRadii during the live session
+    if (shot.score_points !== undefined && shot.score_points !== null) {
+      console.log(`✅ Using stored score for shot ${shot.shot_number}: ${shot.score_points} pts`);
+      return shot.score_points;
+    }
+
+    // Fallback: recalculate score if stored score is missing
+    // This should rarely happen for properly saved sessions
+    console.warn('⚠️ Missing stored score for shot, recalculating:', shot);
+
+    // Convert shot coordinates to hit format
+    const hit = {
+      x: Number(shot.x_coordinate),
+      y: Number(shot.y_coordinate)
+    };
+
+    // Get reference point (bullseye or target center)
+    const referencePoint = sessionData?.bullseye_position ?
+      { x: sessionData.bullseye_position.x, y: sessionData.bullseye_position.y } :
+      getTargetCenter();
+
+    // Get template from session data
+    const template = sessionData?.template ?
+      TARGET_TEMPLATES.find(t => t.name === sessionData.template) :
+      { diameter: 150 }; // fallback
+
+    // Calculate ring radii (without visualRingRadii, may be inaccurate)
+    const esaParameter = sessionData?.parameters?.esa || null;
+    const ringRadii = calculateRingRadii(template, esaParameter);
+
+    const recalculatedScore = calculateZoneScore(hit, referencePoint, ringRadii);
+    console.log(`🔄 Recalculated score for shot ${shot.shot_number}: ${recalculatedScore} pts`);
+
+    return recalculatedScore;
+  };
 
   // Helper function to convert firing mode for display
   const getFiringModeDisplay = (mode) => {
@@ -101,7 +156,15 @@ const SessionDetailsPage = () => {
 
   // Helper function to get target distance from TARGET_TEMPLATES or custom distance
   const getTargetDistanceFromTemplate = () => {
-    // Check for custom distance first
+    // Check for custom distance first (database uses snake_case)
+    if (sessionData?.parameters?.use_custom_distance && sessionData?.parameters?.custom_distance) {
+      const customDistance = parseFloat(sessionData.parameters.custom_distance);
+      if (!isNaN(customDistance) && customDistance > 0) {
+        return `${customDistance}m (Custom)`;
+      }
+    }
+
+    // Also check for camelCase version for backward compatibility
     if (sessionData?.parameters?.useCustomDistance && sessionData?.parameters?.customDistance) {
       const customDistance = parseFloat(sessionData.parameters.customDistance);
       if (!isNaN(customDistance) && customDistance > 0) {
@@ -133,6 +196,47 @@ const SessionDetailsPage = () => {
     }
 
     return 'N/A';
+  };
+
+  // Helper function to get the actual template object for TargetVisualization
+  const getTemplateForVisualization = () => {
+    console.log('🎯 SessionDetailsPage - Getting template for visualization:', {
+      sessionData: sessionData,
+      parameters: sessionData?.parameters,
+      finalReport: sessionData?.finalReport
+    });
+
+    // First, try to get template_id from parameters
+    const templateId = sessionData?.parameters?.template_id;
+    if (templateId) {
+      const template = TARGET_TEMPLATES.find(t => t.id === templateId);
+      if (template) {
+        console.log('✅ Found template by template_id:', template);
+        return template;
+      }
+    }
+
+    // Fallback: try to get template_name and match it
+    const templateName = sessionData?.parameters?.template_name || sessionData?.finalReport?.template_name;
+    if (templateName) {
+      const template = TARGET_TEMPLATES.find(t => t.name === templateName);
+      if (template) {
+        console.log('✅ Found template by template_name:', template);
+        return template;
+      }
+    }
+
+    // Check legacy sessionData.template field
+    if (sessionData?.template) {
+      const template = TARGET_TEMPLATES.find(t => t.name === sessionData.template);
+      if (template) {
+        console.log('✅ Found template by legacy sessionData.template:', template);
+        return template;
+      }
+    }
+
+    console.log('⚠️ No template found for visualization, using default');
+    return null; // Let TargetVisualization handle the default
   };
 
   // Load session details
@@ -389,7 +493,7 @@ const SessionDetailsPage = () => {
                 borderRadius: '8px'
               }}>
                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3b82f6' }}>
-                  {sessionData.finalReport.total_score}
+                  {sessionData.shots.reduce((total, shot) => total + getCorrectHitScore(shot, sessionData), 0)}
                 </div>
                 <div style={{ fontSize: '12px', color: '#64748b' }}>Total Score</div>
               </div>
@@ -749,7 +853,9 @@ const SessionDetailsPage = () => {
             <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1f2937', marginBottom: '16px' }}>
               📊 Performance Metrics
             </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+            {/* Performance Metrics */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#64748b' }}>Accuracy:</span>
                 <span style={{ fontWeight: 'bold', color: '#10b981' }}>{analytics.accuracy}%</span>
@@ -771,6 +877,24 @@ const SessionDetailsPage = () => {
                 <span style={{ fontWeight: '600' }}>({analytics.trueMPI.x}, {analytics.trueMPI.y})</span>
               </div>
             </div>
+
+            {/* Target Visualization - Below True MPI */}
+            {sessionData?.shots && sessionData.shots.length > 0 && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginTop: '16px'
+              }}>
+                <TargetVisualization
+                  shots={sessionData.shots}
+                  sessionParameters={sessionData.parameters}
+                  template={getTemplateForVisualization()}
+                  containerSize={298}
+                  showTitle={false}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -830,7 +954,7 @@ const SessionDetailsPage = () => {
                           fontSize: '12px',
                           fontWeight: '600'
                         }}>
-                          {shot.score_points || 10} pts
+                          {getCorrectHitScore(shot, sessionData)} pts
                         </span>
                       </td>
                       <td style={{ padding: '12px', fontSize: '14px' }}>

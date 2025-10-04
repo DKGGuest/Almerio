@@ -1312,8 +1312,12 @@ const TargetDisplay = memo(({
             clearInterval(countdownTimer);
             setTimedState('WINDOW');
             // Mark as started only after countdown completes
-            if (onParametersUpdate && laneId) {
-              try { setTimeout(() => onParametersUpdate(laneId, { hasRun: true }), 0); } catch (_) {}
+            if (onParametersUpdate && laneId && shootingParameters) {
+              try {
+                // CRITICAL FIX: Merge hasRun with existing parameters to preserve custom distance settings
+                const updatedParams = { ...shootingParameters, hasRun: true };
+                setTimeout(() => onParametersUpdate(laneId, updatedParams), 0);
+              } catch (_) {}
             }
             return 0;
           }
@@ -1373,9 +1377,10 @@ const TargetDisplay = memo(({
 
   // Clear local state ONLY on genuine lane reset; avoid clearing when switching tabs
   useEffect(() => {
-    console.log('[TargetDisplay] Reset watcher', { hitsLen: hits.length, bullseye, hasTemplate: !!template, hasImage: !!uploadedImage, shooter: !!shooter, localBullets: bullets.length });
+    console.log('[TargetDisplay] Reset watcher', { hitsLen: hits.length, bullseye, hasTemplate: !!template, hasImage: !!uploadedImage, shooter: !!shooter, localBullets: bullets.length, hasParameters: !!parameters });
     // Do not clear if we still have local bullets; tab switches may not pass hits immediately
-    if (!hits.length && !bullseye && !template && !uploadedImage && !shooter && bullets.length === 0) {
+    // CRITICAL FIX: Don't clear shooting parameters if we have valid parameters prop (even if template is temporarily null)
+    if (!hits.length && !bullseye && !template && !uploadedImage && !shooter && bullets.length === 0 && !parameters) {
       console.log('[TargetDisplay] Clearing local state after full reset');
       setBullets([]);
       setBullseyeId(null);
@@ -1387,14 +1392,15 @@ const TargetDisplay = memo(({
       setShowParameterForm(false);
       setShowParameterView(false);
     }
-  }, [hits, bullseye, template, uploadedImage, shooter, bullets.length]);
+  }, [hits, bullseye, template, uploadedImage, shooter, bullets.length, parameters]);
 
 
   // Sync local state with parent lane state after reset
   useEffect(() => {
     // Only perform a FULL reset when we explicitly get a RESET signal via onAddHit
     // or when everything is truly empty AND there are no local bullets.
-    if (!hits.length && !bullseye && !template && !uploadedImage && !shooter && bullets.length === 0) {
+    // CRITICAL FIX: Don't clear shooting parameters if we have valid parameters prop (even if template is temporarily null)
+    if (!hits.length && !bullseye && !template && !uploadedImage && !shooter && bullets.length === 0 && !parameters) {
       setBullets([]);
       setBullseyeId(null);
       setShootingPhase('SELECT_BULLSEYE');
@@ -1405,7 +1411,7 @@ const TargetDisplay = memo(({
       setShowParameterForm(false);
       setShowParameterView(false);
     }
-  }, [hits, bullseye, template, uploadedImage, shooter, bullets.length]);
+  }, [hits, bullseye, template, uploadedImage, shooter, bullets.length, parameters]);
   // Snap mode: DISPLAY/HIDE cycle transitions
   useEffect(() => {
     const mode = (shootingParameters?.firingMode || parameters?.firingMode) || null;
@@ -1464,8 +1470,12 @@ const TargetDisplay = memo(({
       setSnapTimer(displayTime);
     }
     // mark parameters as hasRun so we don't restart on shots or updates
-    if (onParametersUpdate && laneId) {
-      try { setTimeout(() => onParametersUpdate(laneId, { hasRun: true }), 0); } catch (_) {}
+    if (onParametersUpdate && laneId && shootingParameters) {
+      try {
+        // CRITICAL FIX: Merge hasRun with existing parameters to preserve custom distance settings
+        const updatedParams = { ...shootingParameters, hasRun: true };
+        setTimeout(() => onParametersUpdate(laneId, updatedParams), 0);
+      } catch (_) {}
     }
   }, [snapState, snapCountdownSec, shootingParameters?.snapDisplayTime, parameters?.snapDisplayTime, shootingParameters?.snapDisappearTime, parameters?.snapDisappearTime, shootingParameters?.snapStartBehavior, parameters?.snapStartBehavior, shootingParameters?.firingMode, parameters?.firingMode]);
 
@@ -1604,19 +1614,11 @@ const TargetDisplay = memo(({
     }
   }, [bullets.length, bullseyeId, isCustomPositioning, shootingPhase]);
 
-  // Use ref to track if we're currently processing a click to prevent race conditions
-  const isProcessingClick = useRef(false);
+  // Use ref to track last click timestamp to prevent duplicate clicks at same position
+  const lastClickTime = useRef(0);
+  const lastClickPosition = useRef({ x: 0, y: 0 });
 
   const handleTargetClick = useCallback((e) => {
-    // Prevent rapid-fire clicks from causing issues
-    if (isProcessingClick.current) return;
-    isProcessingClick.current = true;
-
-    // Reset the flag after a short delay
-    setTimeout(() => {
-      isProcessingClick.current = false;
-    }, 50);
-
     if (!targetRef.current) return;
 
     // Check if click is on an existing bullet
@@ -1634,6 +1636,22 @@ const TargetDisplay = memo(({
     const scale = coordinateSpace / containerSize;
     const x = Math.round((e.clientX - rect.left) * scale);
     const y = Math.round((e.clientY - rect.top) * scale);
+
+    // Prevent duplicate clicks at nearly the same position within a short time window
+    const now = Date.now();
+    const timeSinceLastClick = now - lastClickTime.current;
+    const distanceFromLastClick = Math.sqrt(
+      Math.pow(x - lastClickPosition.current.x, 2) + Math.pow(y - lastClickPosition.current.y, 2)
+    );
+
+    // If click is within 5px of last click and within 100ms, ignore it (likely accidental double-click)
+    if (timeSinceLastClick < 100 && distanceFromLastClick < 5) {
+      return;
+    }
+
+    // Update last click tracking
+    lastClickTime.current = now;
+    lastClickPosition.current = { x, y };
 
     if (shootingPhase === 'SELECT_BULLSEYE' && isCustomPositioning) {
       // First click sets the bullseye when in custom positioning mode
@@ -1674,7 +1692,9 @@ const TargetDisplay = memo(({
         y,
         timestamp: Date.now(),
         timePhase: typeof timedState === 'string' ? timedState : 'IDLE',
-        includeInStats
+        includeInStats,
+        // Add snapState for Snap firing mode scoring logic
+        snapState: mode === 'snap' ? snapState : null
       };
 
       // Debug logging for TIMED mode shot creation
@@ -2256,6 +2276,24 @@ const TargetDisplay = memo(({
               fontSize: 11
             }}>
               <span>{message}</span>
+            </div>
+          )}
+
+          {/* Snap mode status overlay */}
+          {(shootingParameters?.firingMode || parameters?.firingMode) === 'snap' && (snapState === 'DISPLAY' || snapState === 'HIDE') && (
+            <div style={{ position: 'relative', height: 0 }}>
+              <div style={{
+                position: 'absolute', top: -36, left: 0, right: 0,
+                textAlign: 'center',
+                color: snapState === 'DISPLAY' ? '#065f46' : '#dc2626',
+                background: snapState === 'DISPLAY' ? '#ecfdf5' : '#fef2f2',
+                border: `1px solid ${snapState === 'DISPLAY' ? '#10b981' : '#ef4444'}`,
+                borderRadius: 6, padding: '4px 8px',
+                fontWeight: 700
+              }}>
+                {snapState === 'DISPLAY' ? '🎯 Target Visible - Fire Now!' : '🚫 Target Hidden - No Points!'}
+                {snapTimer > 0 && ` (${snapTimer}s)`}
+              </div>
             </div>
           )}
 
