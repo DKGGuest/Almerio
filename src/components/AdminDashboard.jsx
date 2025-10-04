@@ -1434,7 +1434,7 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
                 LANE CONTROLS
               </span>
               <button
-                onClick={() => navigate('/shooters')}
+                onClick={() => window.open('/shooters', '_blank')}
                 style={{
                   background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                   color: 'white',
@@ -1446,7 +1446,7 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
                   cursor: 'pointer',
                   whiteSpace: 'nowrap'
                 }}
-                title="View all shooters and their profiles"
+                title="View all shooters and their profiles (opens in new tab)"
               >
                 👥 ALL SHOOTERS
               </button>
