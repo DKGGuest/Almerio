@@ -154,11 +154,35 @@ const TargetVisualization = ({
   // Scale factor for container
   const scale = containerSize / 400;
 
+  // Calculate black ring positions between green bullseye ring and blue concentric ring
+  const blackRings = useMemo(() => {
+    const greenRadius = ringRadii.greenBullseyeRadius;
+    const blueRadius = ringRadii.blueInnerRadius;
+
+    // Calculate the area between blue ring and green ring for black rings
+    const availableArea = greenRadius - blueRadius;
+
+    // Create 6 evenly-spaced black rings between blue and green rings
+    const numberOfBlackRings = 6;
+    const rings = [];
+
+    for (let i = 1; i <= numberOfBlackRings; i++) {
+      // Calculate radius for each black ring, evenly distributed
+      const ringPosition = i / (numberOfBlackRings + 1); // Positions: 0.143, 0.286, 0.429, 0.571, 0.714, 0.857
+      const blackRingRadius = blueRadius + (availableArea * ringPosition);
+      rings.push(blackRingRadius);
+    }
+
+    return rings;
+  }, [ringRadii.greenBullseyeRadius, ringRadii.blueInnerRadius]);
+
   // Calculate scaled ring radii for display - using the same structure as TargetDisplay
   const scaledRingRadii = {
     green: ringRadii.greenBullseyeRadius * scale,
     orange: ringRadii.orangeESARadius * scale,
-    blue: ringRadii.blueInnerRadius * scale
+    blue: ringRadii.blueInnerRadius * scale,
+    // Scale black rings using the same scale factor
+    blackRings: blackRings.map(radius => radius * scale)
   };
 
   console.log('🎯 TargetVisualization - Ring radii calculated:', {
@@ -169,13 +193,16 @@ const TargetVisualization = ({
     originalRadii: {
       green: ringRadii.greenBullseyeRadius?.toFixed(1),
       orange: ringRadii.orangeESARadius?.toFixed(1),
-      blue: ringRadii.blueInnerRadius?.toFixed(1)
+      blue: ringRadii.blueInnerRadius?.toFixed(1),
+      blackRings: blackRings.map(r => r?.toFixed(1))
     },
     scaledRadii: {
       green: scaledRingRadii.green?.toFixed(1),
       orange: scaledRingRadii.orange?.toFixed(1),
-      blue: scaledRingRadii.blue?.toFixed(1)
-    }
+      blue: scaledRingRadii.blue?.toFixed(1),
+      blackRings: scaledRingRadii.blackRings?.map(r => r?.toFixed(1))
+    },
+    ringOrder: 'Green (outermost) → Black Rings → Blue (innermost), Orange (middle)'
   });
 
   // Center position for rings (center of container)
@@ -206,7 +233,7 @@ const TargetVisualization = ({
           position: 'relative',
           width: `${containerSize}px`,
           height: `${containerSize}px`,
-          backgroundImage: `url('${import.meta.env.BASE_URL}target.svg')`,
+          // backgroundImage: `url('${import.meta.env.BASE_URL}target.svg')`,
           backgroundSize: 'contain',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
@@ -345,6 +372,26 @@ const TargetVisualization = ({
             }}
           />
         )}
+
+        {/* Black rings inside green bullseye ring */}
+        {scaledRingRadii.blackRings && scaledRingRadii.blackRings.map((blackRingRadius, index) => (
+          <div
+            key={`black-ring-${index}`}
+            style={{
+              position: 'absolute',
+              left: `${centerX}px`,
+              top: `${centerY}px`,
+              width: `${blackRingRadius * 2}px`,
+              height: `${blackRingRadius * 2}px`,
+              border: '1px solid #000000',
+              borderRadius: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: 'transparent',
+              zIndex: 11, // Between green (10) and orange (12)
+              pointerEvents: 'none',
+            }}
+          />
+        ))}
 
         {/* Blue inner ring (innermost) */}
         {scaledRingRadii.blue && (

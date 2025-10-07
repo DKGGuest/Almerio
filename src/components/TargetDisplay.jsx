@@ -1846,6 +1846,32 @@ const TargetDisplay = memo(({
     return orangeRadius;
   }, [getESARadius]);
 
+  // Calculate 6 black ring positions between green bullseye ring and blue concentric ring
+  const getBlackRings = useMemo(() => {
+    const greenRadius = getTemplateRadius;
+    const blueRadius = getOrangeCircleRadius;
+
+    if (!greenRadius || !blueRadius) {
+      return [];
+    }
+
+    // Calculate the area between blue ring and green ring for black rings
+    const availableArea = greenRadius - blueRadius;
+
+    // Create 6 evenly-spaced black rings between blue and green rings
+    const numberOfBlackRings = 6;
+    const rings = [];
+
+    for (let i = 1; i <= numberOfBlackRings; i++) {
+      // Calculate radius for each black ring, evenly distributed
+      const ringPosition = i / (numberOfBlackRings + 1); // Positions: 0.143, 0.286, 0.429, 0.571, 0.714, 0.857
+      const blackRingRadius = blueRadius + (availableArea * ringPosition);
+      rings.push(blackRingRadius);
+    }
+
+    return rings;
+  }, [getTemplateRadius, getOrangeCircleRadius]);
+
   const getBullseyeBullet = useMemo(() => {
     return bullets.find(bullet => bullet.id === bullseyeId);
   }, [bullets, bullseyeId]);
@@ -2124,7 +2150,8 @@ const TargetDisplay = memo(({
         visualRingRadii: {
           greenBullseyeRadius: getTemplateRadius,
           orangeESARadius: getESARadius,
-          blueInnerRadius: getOrangeCircleRadius
+          blueInnerRadius: getOrangeCircleRadius,
+          blackRings: getBlackRings
         }
       });
     }
@@ -2456,7 +2483,11 @@ const TargetDisplay = memo(({
             setCursorPos(null);
           }, [])}
           style={{
-            backgroundImage: uploadedImage ? `url('${uploadedImage}')` : `url('${import.meta.env.BASE_URL}target.svg')`,
+            // Show background target image with concentric rings BEFORE parameters are set
+            // After parameters are chosen, remove background to show only colored rings
+            backgroundImage: (shootingParameters || parameters) ? 'none' :
+                           (uploadedImage ? `url('${uploadedImage}')` : `url('${import.meta.env.BASE_URL}target.svg')`),
+            backgroundColor: (shootingParameters || parameters) ? '#f0f0f0' : 'transparent',
             backgroundSize: 'contain',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
@@ -2677,6 +2708,29 @@ const TargetDisplay = memo(({
             />
           )}
 
+          {/* Black rings between green bullseye ring and blue concentric ring */}
+          {bullseyeId && getBullseyeBullet && getBlackRings && getBlackRings.length > 0 && !(((shootingParameters?.firingMode || parameters?.firingMode) === 'snap') && snapState === 'HIDE') &&
+            getBlackRings.map((blackRingRadius, index) => (
+              <div
+                key={`black-ring-${index}`}
+                className="black-ring-always-visible"
+                style={{
+                  left: `${getBullseyeBullet.x * (298/400)}px`,
+                  top: `${getBullseyeBullet.y * (298/400)}px`,
+                  width: `${blackRingRadius * 2 * (298/400)}px`,
+                  height: `${blackRingRadius * 2 * (298/400)}px`,
+                  zIndex: 11, // Between green (10) and orange (12)
+                  position: 'absolute',
+                  border: '1px solid #000000',
+                  borderRadius: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  background: 'transparent',
+                  pointerEvents: 'none',
+                }}
+              />
+            ))
+          }
+
           {/* Dark Orange Circle - Automatically appears inside ESA ring (25% of ESA radius) */}
           {bullseyeId && getBullseyeBullet && getOrangeCircleRadius && !(((shootingParameters?.firingMode || parameters?.firingMode) === 'snap') && snapState === 'HIDE') && (
             <div
@@ -2753,6 +2807,29 @@ const TargetDisplay = memo(({
               }}
             />
           )}
+
+          {/* Black rings - Simplified during shooting for performance */}
+          {shootingPhase === 'SHOOTING' && bullseyeId && getBullseyeBullet && getBlackRings && getBlackRings.length > 0 && !(((shootingParameters?.firingMode || parameters?.firingMode) === 'snap') && snapState === 'HIDE') &&
+            getBlackRings.map((blackRingRadius, index) => (
+              <div
+                key={`black-ring-shooting-${index}`}
+                style={{
+                  position: 'absolute',
+                  left: `${getBullseyeBullet.x * (298/400)}px`,
+                  top: `${getBullseyeBullet.y * (298/400)}px`,
+                  width: `${blackRingRadius * 2 * (298/400)}px`,
+                  height: `${blackRingRadius * 2 * (298/400)}px`,
+                  border: '1px solid #000000',
+                  borderRadius: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  zIndex: 11, // Between green (10) and orange (12)
+                  pointerEvents: 'none',
+                  background: 'transparent',
+                  willChange: 'transform',
+                }}
+              />
+            ))
+          }
 
           {/* Dark Orange Circle - Simplified during shooting for performance */}
           {shootingPhase === 'SHOOTING' && bullseyeId && getBullseyeBullet && getOrangeCircleRadius && !(((shootingParameters?.firingMode || parameters?.firingMode) === 'snap') && snapState === 'HIDE') && (

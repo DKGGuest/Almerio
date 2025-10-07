@@ -9,6 +9,7 @@ import MultiLaneLiveView from './components/MultiLaneLiveView';
 import ShooterProfilePage from './components/ShooterProfilePage';
 import ShooterListPage from './components/ShooterListPage';
 import SessionDetailsPage from './components/SessionDetailsPage';
+import TargetVisualizationTest from './components/TargetVisualizationTest';
 
 import ModernNavigation from './components/ModernNavigation';
 
@@ -216,6 +217,10 @@ function App() {
           <Route
             path="/demo"
             element={<TargetSimulatorDemo />}
+          />
+          <Route
+            path="/test-target"
+            element={<TargetVisualizationTest />}
           />
           <Route
             path="/"
