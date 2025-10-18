@@ -19,13 +19,15 @@ export const FIRING_MODES = {
   UNTIMED: 'untimed',
   TIMED: 'timed',
   SNAP: 'snap',
-  MOVING: 'moving'
+  MOVING: 'moving',
+  IR_GRID: 'ir-grid'
 };
 
 export const FIRING_MODE_OPTIONS = [
   { value: FIRING_MODES.UNTIMED, label: 'Untimed' },
   { value: FIRING_MODES.TIMED, label: 'Timed' },
   { value: FIRING_MODES.SNAP, label: 'Snap' },
+  { value: FIRING_MODES.IR_GRID, label: 'Untimed IR Shots' },
   // { value: FIRING_MODES.MOVING, label: 'Moving' }
 ];
 

@@ -2,22 +2,32 @@ import { useMemo, memo } from 'react';
 import { calculateZoneScore, getZoneName, calculateRingRadii } from '../constants/shootingParameters';
 
 const ShotBreakdown = memo(({ shooter, hits = [], bullseye = null, template = null, laneId = null, shootingParameters = null, visualRingRadii = null }) => {
-  // Filter out bullseye. If any timed WINDOW shots exist, include only WINDOW shots; otherwise include all non-bullseye shots (jumper/snap)
+  // Filter out bullseye. If any timed WINDOW shots exist, include only WINDOW shots; otherwise include all non-bullseye shots (jumper/snap/untimed/ir-grid)
   const hasWindowShots = hits.some(h => h.timePhase === 'WINDOW');
   const actualShots = hits.filter(hit => {
     if (hit.isBullseye) return false;
+    // For IR Grid shots, always include them regardless of timePhase
+    if (hit.isIrGrid) return true;
     if (hasWindowShots) return hit.timePhase === 'WINDOW';
     return true; // include jumper/snap/untimed
   });
 
-  // Debug logging for TIMED mode shot filtering
+  // Debug logging for shot filtering
   const isDebugMode = window.location.search.includes('debug=true');
-  if (isDebugMode && shootingParameters?.firingMode === 'timed') {
-    console.log('🎯 ShotBreakdown TIMED Debug:', {
+  if (isDebugMode || shootingParameters?.firingMode === 'ir-grid') {
+    console.log('🎯 ShotBreakdown Debug:', {
       totalHits: hits.length,
       hasWindowShots,
       actualShots: actualShots.length,
-      hitPhases: hits.map(h => ({ id: h.id, timePhase: h.timePhase, isBullseye: h.isBullseye })),
+      irGridShots: hits.filter(h => h.isIrGrid).length,
+      hitDetails: hits.map(h => ({
+        id: h.id,
+        timePhase: h.timePhase,
+        isBullseye: h.isBullseye,
+        isIrGrid: h.isIrGrid,
+        score: h.score,
+        coords: `(${h.x}, ${h.y})`
+      })),
       firingMode: shootingParameters?.firingMode
     });
   }
@@ -37,6 +47,11 @@ const ShotBreakdown = memo(({ shooter, hits = [], bullseye = null, template = nu
 
   // Calculate zone-based score for a single hit
   const getHitScore = (hit) => {
+    // For IR Grid shots, use the pre-calculated score from TargetDisplay
+    if (hit.isIrGrid && typeof hit.score === 'number') {
+      return hit.score;
+    }
+
     // For SNAP mode, use the database score to preserve 0-point scoring for HIDE phase shots
     // For other modes, recalculate to ensure consistency with current template and parameters
     if (shootingParameters?.firingMode === 'snap' && hit.score !== undefined) {

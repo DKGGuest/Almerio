@@ -1,0 +1,16 @@
+{
+  "sessionId": "150",
+  "startTime": 1760426653960,
+  "isActive": true,
+  "firingMode": "ir-grid",
+  "shots": [],
+  "metadata": {
+    "firingMode": "ir-grid",
+    "sessionType": "practice",
+    "weaponType": "7.62mm-rifle-slr",
+    "targetType": "fig11-combat",
+    "targetDistance": 25,
+    "numberOfRounds": 10,
+    "startedAt": 1760426653960
+  }
+}

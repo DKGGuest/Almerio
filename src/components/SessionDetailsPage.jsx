@@ -82,7 +82,8 @@ const SessionDetailsPage = () => {
       case 'timed': return 'Timed';
       case 'moving': return 'Moving Target';
       case 'practice': return 'Practice';
-      default: return mode || 'Practice';
+      case 'ir-grid': return 'Untimed IR Shots';
+      default: return getFiringModeLabel(mode) || mode || 'Practice';
     }
   };
 
@@ -692,8 +693,24 @@ const SessionDetailsPage = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px' }}>
               {/* Basic Parameters */}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
-                <span style={{ color: '#64748b', fontWeight: '500' }}>🎯 Firing Mode:</span>
-                <span style={{ fontWeight: '600' }}>{getFiringModeDisplay(getFiringMode()) || 'N/A'}</span>
+                <span style={{ color: '#64748b', fontWeight: '500' }}>
+                  {getFiringMode() === 'ir-grid' ? '🔌' : '🎯'} Firing Mode:
+                </span>
+                <span style={{ fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {getFiringModeDisplay(getFiringMode()) || 'N/A'}
+                  {getFiringMode() === 'ir-grid' && (
+                    <span style={{
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      fontSize: '10px',
+                      padding: '2px 6px',
+                      borderRadius: '8px',
+                      fontWeight: 'bold'
+                    }}>
+                      IR GRID
+                    </span>
+                  )}
+                </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '4px' }}>
                 <span style={{ color: '#64748b', fontWeight: '500' }}>📋 Session Type:</span>
@@ -762,7 +779,8 @@ const SessionDetailsPage = () => {
             {/* Advanced Settings Section - Mode-specific parameters */}
             {(sessionData?.parameters?.firing_mode === 'moving' ||
               sessionData?.parameters?.firing_mode === 'snap' ||
-              sessionData?.parameters?.firing_mode === 'timed') && (
+              sessionData?.parameters?.firing_mode === 'timed' ||
+              sessionData?.parameters?.firing_mode === 'ir-grid') && (
               <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
                 <h4 style={{ fontSize: '14px', fontWeight: 'bold', color: '#64748b', marginBottom: '12px' }}>
                   ⚙️ Advanced Settings
@@ -806,6 +824,24 @@ const SessionDetailsPage = () => {
                       <span style={{ color: '#64748b', fontWeight: '500' }}>⏱️ Time Limit:</span>
                       <span style={{ fontWeight: '600' }}>{sessionData.parameters.time_limit ? `${sessionData.parameters.time_limit}s` : 'N/A'}</span>
                     </div>
+                  )}
+
+                  {/* IR Grid Mode Parameters */}
+                  {sessionData?.parameters?.firing_mode === 'ir-grid' && (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#fef2f2', borderRadius: '4px' }}>
+                        <span style={{ color: '#64748b', fontWeight: '500' }}>🔌 IR Grid Mode:</span>
+                        <span style={{ fontWeight: '600', color: '#ef4444' }}>Real-time Detection</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#fef2f2', borderRadius: '4px' }}>
+                        <span style={{ color: '#64748b', fontWeight: '500' }}>📡 Data Source:</span>
+                        <span style={{ fontWeight: '600' }}>UART Serial Communication</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', backgroundColor: '#fef2f2', borderRadius: '4px' }}>
+                        <span style={{ color: '#64748b', fontWeight: '500' }}>🎯 Shot Detection:</span>
+                        <span style={{ fontWeight: '600' }}>Infrared Grid System</span>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -892,6 +928,7 @@ const SessionDetailsPage = () => {
                   template={getTemplateForVisualization()}
                   containerSize={298}
                   showTitle={false}
+                  uploadedImage={sessionData?.uploadedImage}
                 />
               </div>
             )}
@@ -932,39 +969,66 @@ const SessionDetailsPage = () => {
                     <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>
                       Distance from Center
                     </th>
+                    {sessionData?.parameters?.firing_mode === 'ir-grid' && (
+                      <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#374151' }}>
+                        Data Source
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {sessionData.shots.map((shot, index) => (
-                    <tr key={index} style={{
-                      borderBottom: '1px solid #e5e7eb',
-                      backgroundColor: index % 2 === 0 ? 'white' : '#f8fafc'
-                    }}>
-                      <td style={{ padding: '12px', fontWeight: '600' }}>{shot.shot_number || index + 1}</td>
-                      <td style={{ padding: '12px' }}>({Number(shot.x_coordinate) - 200}, {200 - Number(shot.y_coordinate)})</td>
-                      <td style={{ padding: '12px', fontSize: '14px', color: '#64748b' }}>
-                        {shot.timestamp_fired ? new Date(shot.timestamp_fired).toLocaleTimeString() : 'N/A'}
-                      </td>
-                      <td style={{ padding: '12px' }}>
-                        <span style={{
-                          backgroundColor: '#dbeafe',
-                          color: '#1e40af',
-                          padding: '4px 8px',
-                          borderRadius: '4px',
-                          fontSize: '12px',
-                          fontWeight: '600'
-                        }}>
-                          {getCorrectHitScore(shot, sessionData)} pts
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px', fontSize: '14px' }}>
-                        {Math.sqrt(
-                          Math.pow(Number(shot.x_coordinate) - 200, 2) +
-                          Math.pow(Number(shot.y_coordinate) - 200, 2)
-                        ).toFixed(1)}mm
-                      </td>
-                    </tr>
-                  ))}
+                  {sessionData.shots.map((shot, index) => {
+                    const isIRShot = sessionData?.parameters?.firing_mode === 'ir-grid' || shot.time_phase === 'IR_GRID';
+                    return (
+                      <tr key={index} style={{
+                        borderBottom: '1px solid #e5e7eb',
+                        backgroundColor: isIRShot
+                          ? (index % 2 === 0 ? '#fef2f2' : '#fecaca')
+                          : (index % 2 === 0 ? 'white' : '#f8fafc')
+                      }}>
+                        <td style={{ padding: '12px', fontWeight: '600' }}>
+                          {isIRShot && <span style={{ color: '#ef4444', marginRight: '4px' }}>🔌</span>}
+                          {shot.shot_number || index + 1}
+                        </td>
+                        <td style={{ padding: '12px' }}>({Number(shot.x_coordinate) - 200}, {200 - Number(shot.y_coordinate)})</td>
+                        <td style={{ padding: '12px', fontSize: '14px', color: '#64748b' }}>
+                          {shot.timestamp_fired ? new Date(shot.timestamp_fired).toLocaleTimeString() : 'N/A'}
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          <span style={{
+                            backgroundColor: isIRShot ? '#fecaca' : '#dbeafe',
+                            color: isIRShot ? '#dc2626' : '#1e40af',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontWeight: '600'
+                          }}>
+                            {getCorrectHitScore(shot, sessionData)} pts
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px', fontSize: '14px' }}>
+                          {Math.sqrt(
+                            Math.pow(Number(shot.x_coordinate) - 200, 2) +
+                            Math.pow(Number(shot.y_coordinate) - 200, 2)
+                          ).toFixed(1)}mm
+                        </td>
+                        {sessionData?.parameters?.firing_mode === 'ir-grid' && (
+                          <td style={{ padding: '12px', fontSize: '12px', color: '#64748b' }}>
+                            <span style={{
+                              backgroundColor: '#ef4444',
+                              color: 'white',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontSize: '10px',
+                              fontWeight: 'bold'
+                            }}>
+                              IR GRID
+                            </span>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

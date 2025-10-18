@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Target Type Images Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .image-test {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .target-preview {
+            width: 300px;
+            height: 300px;
+            background-size: contain;
+            background-position: center;
+            background-repeat: no-repeat;
+            border: 2px solid #ccc;
+            margin: 10px 0;
+        }
+        .mapping-info {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🎯 Target Type Images Test</h1>
+        <p>This page tests the target type image mapping implemented in the shooting application.</p>
+        
+        <div class="mapping-info">
+            <strong>Target Type Mapping:</strong><br>
+            'fig11-combat' → 'FIG 11 - Combat Target.webp'<br>
+            'combat-120cm' → '120 cm Combat Target.jpg'<br>
+            'grouping-30cm' → '30 cm Grouping Target.jpeg'
+        </div>
+
+        <div class="image-test">
+            <h3>1. FIG 11 - Combat Target</h3>
+            <p><strong>Target Type:</strong> fig11-combat</p>
+            <p><strong>Image File:</strong> FIG 11 - Combat Target.webp</p>
+            <div class="target-preview" style="background-image: url('./public/FIG 11 - Combat Target.webp');"></div>
+        </div>
+
+        <div class="image-test">
+            <h3>2. 120 cm Combat Target</h3>
+            <p><strong>Target Type:</strong> combat-120cm</p>
+            <p><strong>Image File:</strong> 120 cm Combat Target.jpg</p>
+            <div class="target-preview" style="background-image: url('./public/120 cm Combat Target.jpg');"></div>
+        </div>
+
+        <div class="image-test">
+            <h3>3. 30 cm Grouping Target</h3>
+            <p><strong>Target Type:</strong> grouping-30cm</p>
+            <p><strong>Image File:</strong> 30 cm Grouping Target.jpeg</p>
+            <div class="target-preview" style="background-image: url('./public/30 cm Grouping Target.jpeg');"></div>
+        </div>
+
+        <div class="mapping-info">
+            <strong>Priority Logic:</strong><br>
+            1. User-uploaded custom image (highest priority)<br>
+            2. Target type-based image (medium priority)<br>
+            3. Default target.svg (fallback)
+        </div>
+
+        <div class="mapping-info">
+            <strong>Implementation Details:</strong><br>
+            • Images are 400x400 pixels or scale to fit target display<br>
+            • Background-size: contain ensures proper scaling<br>
+            • Images are centered in target display area<br>
+            • Works in both TargetDisplay and TargetVisualization components
+        </div>
+    </div>
+</body>
+</html>

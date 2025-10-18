@@ -8,7 +8,10 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const http = require('http');
 const { db, testConnection, initializeDatabase } = require('./database_config');
+const irGridService = require('./services/irGridService');
+const websocketService = require('./services/websocketService');
 require('dotenv').config();
 
 const app = express();
@@ -554,6 +557,26 @@ app.post('/api/sessions/:id/parameters', async (req, res) => {
         });
 
         const savedParameters = await db.findOne('SELECT * FROM shooting_parameters WHERE id = ?', [paramId]);
+
+        // If this is an IR grid session, start the IR grid session
+        if (parameters.firingMode === 'ir-grid' && irGridService.isServiceConnected()) {
+            console.log(`🎯 Starting IR Grid session for session ${sessionId}`);
+            try {
+                await irGridService.startSession(sessionId, {
+                    firingMode: parameters.firingMode,
+                    sessionType: parameters.sessionType,
+                    weaponType: parameters.weaponType,
+                    targetType: parameters.targetType,
+                    targetDistance: targetDistance,
+                    numberOfRounds: parameters.numberOfRounds,
+                    startedAt: Date.now()
+                });
+                console.log(`✅ IR Grid session started for session ${sessionId}`);
+            } catch (error) {
+                console.error(`❌ Failed to start IR Grid session for ${sessionId}:`, error);
+            }
+        }
+
         res.json(savedParameters);
     } catch (error) {
         console.error('Error saving parameters:', error);
@@ -590,6 +613,64 @@ app.post('/api/sessions/:id/bullseye', async (req, res) => {
     } catch (error) {
         console.error('Error saving bullseye:', error);
         res.status(500).json({ error: 'Failed to save bullseye position' });
+    }
+});
+
+// Save IR Grid shots
+app.post('/api/sessions/:id/ir-shots', async (req, res) => {
+    try {
+        const sessionId = req.params.id;
+        const irShots = Array.isArray(req.body) ? req.body : [req.body];
+
+        console.log('🎯 Saving IR Grid shots for session', sessionId);
+        console.log('📊 IR shot data received:', JSON.stringify(irShots, null, 2));
+
+        // Verify this is an IR grid session
+        const parameters = await db.findOne(`
+            SELECT firing_mode FROM shooting_parameters
+            WHERE session_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        `, [sessionId]);
+
+        if (!parameters || parameters.firing_mode !== 'ir-grid') {
+            return res.status(400).json({
+                error: 'Session is not configured for IR Grid mode',
+                currentMode: parameters?.firing_mode || 'unknown'
+            });
+        }
+
+        const savedShots = [];
+        for (const shot of irShots) {
+            console.log('Processing IR shot:', shot);
+
+            const shotData = {
+                session_id: sessionId,
+                shot_number: shot.shotNumber || 1,
+                x_coordinate: shot.x,
+                y_coordinate: shot.y,
+                timestamp_fired: shot.timestamp || Date.now(),
+                distance_from_center: shot.distanceFromCenter || null,
+                score_points: shot.score || 0,
+                is_bullseye: shot.isBullseye || false,
+                time_phase: 'IR_GRID',
+                notes: shot.notes || `IR Grid shot - Raw: ${shot.rawData || ''}`
+            };
+
+            console.log('Inserting IR shot data:', shotData);
+
+            const shotId = await db.insert('shot_coordinates', shotData);
+            console.log('IR shot inserted with ID:', shotId);
+
+            const savedShot = await db.findOne('SELECT * FROM shot_coordinates WHERE id = ?', [shotId]);
+            savedShots.push(savedShot);
+        }
+
+        console.log(`✅ Saved ${savedShots.length} IR Grid shots for session ${sessionId}`);
+        res.json(savedShots);
+    } catch (error) {
+        console.error('Error saving IR Grid shots:', error);
+        res.status(500).json({ error: 'Failed to save IR Grid shots' });
     }
 });
 
@@ -908,6 +989,318 @@ app.use('*', (req, res) => {
 });
 
 // =====================================================
+// IR GRID API ENDPOINTS
+// =====================================================
+
+// Start IR Grid session
+app.post('/api/ir-grid/sessions/:sessionId/start', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const sessionInfo = req.body;
+
+        console.log(`🎯 Starting IR Grid session: ${sessionId}`);
+
+        if (!irGridService.isServiceConnected()) {
+            return res.status(503).json({
+                error: 'IR Grid service not connected',
+                message: 'Please check IR Grid hardware connection'
+            });
+        }
+
+        const success = await irGridService.startSession(sessionId, sessionInfo);
+
+        if (success) {
+            res.json({
+                success: true,
+                sessionId: sessionId,
+                message: 'IR Grid session started successfully'
+            });
+        } else {
+            res.status(500).json({
+                error: 'Failed to start IR Grid session',
+                sessionId: sessionId
+            });
+        }
+    } catch (error) {
+        console.error('Error starting IR Grid session:', error);
+        res.status(500).json({ error: 'Failed to start IR Grid session' });
+    }
+});
+
+// Stop IR Grid session
+app.post('/api/ir-grid/sessions/:sessionId/stop', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        console.log(`🏁 Stopping IR Grid session: ${sessionId}`);
+
+        const sessionData = await irGridService.stopSession(sessionId);
+
+        if (sessionData) {
+            res.json({
+                success: true,
+                sessionId: sessionId,
+                sessionData: sessionData,
+                message: 'IR Grid session stopped successfully'
+            });
+        } else {
+            res.status(404).json({
+                error: 'IR Grid session not found',
+                sessionId: sessionId
+            });
+        }
+    } catch (error) {
+        console.error('Error stopping IR Grid session:', error);
+        res.status(500).json({ error: 'Failed to stop IR Grid session' });
+    }
+});
+
+// Get IR Grid session data
+app.get('/api/ir-grid/sessions/:sessionId', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+
+        const sessionData = irGridService.getSessionData(sessionId);
+
+        if (sessionData) {
+            res.json(sessionData);
+        } else {
+            // Try to load from file
+            const fileData = await irGridService.loadSessionFromFile(sessionId);
+            if (fileData) {
+                res.json(fileData);
+            } else {
+                res.status(404).json({
+                    error: 'IR Grid session not found',
+                    sessionId: sessionId
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error getting IR Grid session:', error);
+        res.status(500).json({ error: 'Failed to get IR Grid session data' });
+    }
+});
+
+// Get IR Grid service status
+app.get('/api/ir-grid/status', (req, res) => {
+    try {
+        const status = {
+            connected: irGridService.isServiceConnected(),
+            activeSessions: irGridService.getActiveSessions().length,
+            serviceEnabled: process.env.IR_GRID_ENABLED === 'true',
+            portPath: process.env.IR_GRID_PORT || 'COM13',
+            baudRate: parseInt(process.env.IR_GRID_BAUD_RATE) || 9600
+        };
+
+        res.json(status);
+    } catch (error) {
+        console.error('Error getting IR Grid status:', error);
+        res.status(500).json({ error: 'Failed to get IR Grid status' });
+    }
+});
+
+// Simulate IR Grid shot (for testing)
+app.post('/api/ir-grid/simulate-shot', (req, res) => {
+    try {
+        const { x, y } = req.body;
+
+        if (typeof x !== 'number' || typeof y !== 'number') {
+            return res.status(400).json({
+                error: 'Invalid coordinates',
+                message: 'x and y must be numbers'
+            });
+        }
+
+        irGridService.simulateShot(x, y);
+
+        res.json({
+            success: true,
+            message: 'IR Grid shot simulated',
+            coordinates: { x, y }
+        });
+    } catch (error) {
+        console.error('Error simulating IR Grid shot:', error);
+        res.status(500).json({ error: 'Failed to simulate IR Grid shot' });
+    }
+});
+
+// =====================================================
+// IR GRID SIMULATION ENDPOINTS (for end-to-end testing)
+// =====================================================
+
+const irGridSimulator = require('./ir-grid-simulator');
+
+// Start complete IR Grid simulation session
+app.post('/api/ir-grid/simulate-session/:sessionId', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const options = req.body || {};
+
+        console.log(`🎯 Starting IR Grid simulation for session: ${sessionId}`);
+
+        const result = await irGridSimulator.startSimulation(sessionId, options);
+
+        res.json({
+            success: true,
+            message: 'IR Grid simulation started',
+            ...result
+        });
+    } catch (error) {
+        console.error('Error starting IR Grid simulation:', error);
+        res.status(500).json({ error: 'Failed to start IR Grid simulation' });
+    }
+});
+
+// Stop IR Grid simulation
+app.post('/api/ir-grid/simulate-stop', async (req, res) => {
+    try {
+        const result = await irGridSimulator.stopSimulation();
+
+        res.json({
+            success: true,
+            message: 'IR Grid simulation stopped',
+            ...result
+        });
+    } catch (error) {
+        console.error('Error stopping IR Grid simulation:', error);
+        res.status(500).json({ error: 'Failed to stop IR Grid simulation' });
+    }
+});
+
+// Send batch of shots quickly
+app.post('/api/ir-grid/simulate-batch/:sessionId', async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { count = 5 } = req.body;
+
+        console.log(`🚀 Starting batch simulation for session: ${sessionId}`);
+
+        const result = await irGridSimulator.sendBatchShots(sessionId, count);
+
+        res.json({
+            success: true,
+            message: 'Batch shots simulation completed',
+            ...result
+        });
+    } catch (error) {
+        console.error('Error in batch simulation:', error);
+        res.status(500).json({ error: 'Failed to complete batch simulation' });
+    }
+});
+
+// Get simulation status
+app.get('/api/ir-grid/simulate-status', (req, res) => {
+    try {
+        const status = irGridSimulator.getStatus();
+
+        res.json({
+            success: true,
+            simulation: status,
+            timestamp: Date.now()
+        });
+    } catch (error) {
+        console.error('Error getting simulation status:', error);
+        res.status(500).json({ error: 'Failed to get simulation status' });
+    }
+});
+
+// =====================================================
+// IR GRID SERVICE INTEGRATION
+// =====================================================
+
+/**
+ * Set up event handlers for IR Grid service
+ */
+function setupIRGridEventHandlers() {
+    // Handle incoming IR shots
+    irGridService.on('shot', (shotData) => {
+        console.log('🎯 IR Grid shot received:', shotData);
+
+        // Broadcast to WebSocket clients
+        console.log(`📡 Broadcasting IR shot to WebSocket clients...`);
+        websocketService.broadcastToSubscribers('irShots', {
+            type: 'irShot',
+            shot: shotData,
+            timestamp: Date.now()
+        });
+
+        // Also broadcast to all connected clients (fallback)
+        websocketService.broadcast({
+            type: 'irShot',
+            shot: shotData,
+            timestamp: Date.now()
+        });
+    });
+
+    // Handle session-specific shots
+    irGridService.on('sessionShot', async (sessionId, shotData) => {
+        console.log(`🎯 IR Grid session shot: ${sessionId}`, shotData);
+
+        try {
+            // Save shot to database automatically
+            const dbShotData = {
+                session_id: sessionId,
+                shot_number: shotData.shotNumber,
+                x_coordinate: shotData.x,
+                y_coordinate: shotData.y,
+                timestamp_fired: shotData.timestamp,
+                distance_from_center: null, // Will be calculated later
+                score_points: 0, // Will be calculated later
+                is_bullseye: false,
+                time_phase: 'IR_GRID',
+                notes: `IR Grid shot - Raw: ${shotData.rawData || ''}`
+            };
+
+            const shotId = await db.insert('shot_coordinates', dbShotData);
+            console.log(`💾 IR Grid shot saved to database with ID: ${shotId}`);
+
+            // Add database ID to shot data for broadcasting
+            shotData.dbId = shotId;
+        } catch (error) {
+            console.error(`❌ Failed to save IR Grid shot to database:`, error);
+        }
+
+        // Broadcast to session clients
+        websocketService.broadcastToSession(sessionId, {
+            type: 'sessionShot',
+            sessionId: sessionId,
+            shot: shotData,
+            timestamp: Date.now()
+        });
+    });
+
+    // Handle service connection events
+    irGridService.on('connected', () => {
+        console.log('✅ IR Grid service connected');
+        websocketService.broadcast({
+            type: 'irGridStatus',
+            status: 'connected',
+            timestamp: Date.now()
+        });
+    });
+
+    irGridService.on('disconnected', () => {
+        console.log('🔌 IR Grid service disconnected');
+        websocketService.broadcast({
+            type: 'irGridStatus',
+            status: 'disconnected',
+            timestamp: Date.now()
+        });
+    });
+
+    irGridService.on('error', (error) => {
+        console.error('❌ IR Grid service error:', error);
+        websocketService.broadcast({
+            type: 'irGridStatus',
+            status: 'error',
+            error: error.message,
+            timestamp: Date.now()
+        });
+    });
+}
+
+// =====================================================
 // SERVER STARTUP
 // =====================================================
 
@@ -926,12 +1319,44 @@ async function startServer() {
         console.log('🔧 Initializing database schema...');
         await initializeDatabase();
 
+        // Create HTTP server
+        const server = http.createServer(app);
+
+        // Initialize WebSocket service
+        console.log('🔌 Initializing WebSocket service...');
+        websocketService.initialize(server);
+        websocketService.startHeartbeat();
+
+        // Initialize IR Grid service if enabled
+        const irGridEnabled = process.env.IR_GRID_ENABLED === 'true';
+        if (irGridEnabled) {
+            console.log('🎯 Initializing IR Grid service...');
+            const irGridConfig = {
+                portPath: process.env.IR_GRID_PORT || 'COM13',
+                baudRate: parseInt(process.env.IR_GRID_BAUD_RATE) || 9600
+            };
+
+            const irInitialized = await irGridService.initialize(irGridConfig);
+            if (irInitialized) {
+                setupIRGridEventHandlers();
+                console.log('✅ IR Grid service initialized');
+            } else {
+                console.warn('⚠️ IR Grid service failed to initialize - continuing without IR support');
+            }
+        } else {
+            console.log('ℹ️ IR Grid service disabled (set IR_GRID_ENABLED=true to enable)');
+        }
+
         // Start server
-        app.listen(PORT, () => {
+        server.listen(PORT, () => {
             console.log(`🚀 Shooting Range Dashboard Server running on port ${PORT}`);
             console.log(`📊 API endpoints available at http://localhost:${PORT}/api`);
+            console.log(`🔌 WebSocket endpoint available at ws://localhost:${PORT}/ws`);
             console.log(`🏥 Health check: http://localhost:${PORT}/api/health`);
             console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+            if (irGridEnabled) {
+                console.log(`🎯 IR Grid service: ${irGridService.isServiceConnected() ? 'Connected' : 'Disconnected'}`);
+            }
         });
     } catch (error) {
         console.error('❌ Failed to start server:', error.message);

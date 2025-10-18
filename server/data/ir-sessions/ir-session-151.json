@@ -1,0 +1,737 @@
+{
+  "sessionId": "151",
+  "startTime": 1760427202007,
+  "isActive": true,
+  "firingMode": "ir-grid",
+  "shots": [
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427226595,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:32  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427226595,
+      "shotNumber": 1,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427226599,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:32  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427226599,
+      "shotNumber": 2,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427226610,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:32  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427226610,
+      "shotNumber": 3,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427226624,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:32  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427226624,
+      "shotNumber": 4,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427246596,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:51  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246596,
+      "shotNumber": 5,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427246606,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:51  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246606,
+      "shotNumber": 6,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427246631,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:51  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246631,
+      "shotNumber": 7,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427246653,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:52  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246653,
+      "shotNumber": 8,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427246669,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:52  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246669,
+      "shotNumber": 9,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427246681,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:52  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246681,
+      "shotNumber": 10,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427246699,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:52  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246699,
+      "shotNumber": 11,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427246710,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:52  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246710,
+      "shotNumber": 12,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427246717,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:52  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246717,
+      "shotNumber": 13,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427246724,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:52  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246724,
+      "shotNumber": 14,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427246729,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:52  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246729,
+      "shotNumber": 15,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427246738,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:52  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246738,
+      "shotNumber": 16,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427246744,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:52  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246744,
+      "shotNumber": 17,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427246769,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:52  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246769,
+      "shotNumber": 18,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427246773,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:52  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246773,
+      "shotNumber": 19,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427246777,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:52  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246777,
+      "shotNumber": 20,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427246786,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:52  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246786,
+      "shotNumber": 21,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427246792,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:52  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427246792,
+      "shotNumber": 22,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427247087,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:53  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427247087,
+      "shotNumber": 23,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427247092,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:53  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427247092,
+      "shotNumber": 24,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427252152,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:57  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427252152,
+      "shotNumber": 25,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427252156,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:57  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427252156,
+      "shotNumber": 26,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427252343,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:58  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427252343,
+      "shotNumber": 27,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427252349,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:58  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427252349,
+      "shotNumber": 28,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427252354,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:58  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427252354,
+      "shotNumber": 29,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427252360,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:58  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427252360,
+      "shotNumber": 30,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427252392,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:58  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427252392,
+      "shotNumber": 31,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427252399,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:58  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427252399,
+      "shotNumber": 32,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427252409,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:58  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427252409,
+      "shotNumber": 33,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427252415,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:58  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427252415,
+      "shotNumber": 34,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427252420,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:58  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427252420,
+      "shotNumber": 35,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427252425,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:58  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427252425,
+      "shotNumber": 36,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427252451,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:2:58  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427252451,
+      "shotNumber": 37,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427252455,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:2:58  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427252455,
+      "shotNumber": 38,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427259041,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:3:4  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427259041,
+      "shotNumber": 39,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427259046,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:3:4  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427259046,
+      "shotNumber": 40,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427259055,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:3:4  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427259055,
+      "shotNumber": 41,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427259059,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:3:4  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427259059,
+      "shotNumber": 42,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427259065,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:3:4  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427259065,
+      "shotNumber": 43,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427259090,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:3:4  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427259090,
+      "shotNumber": 44,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427259097,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:3:4  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427259097,
+      "shotNumber": 45,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427259101,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:3:4  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427259101,
+      "shotNumber": 46,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427259106,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:3:4  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427259106,
+      "shotNumber": 47,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427259110,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:3:4  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427259110,
+      "shotNumber": 48,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427259114,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:3:4  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427259114,
+      "shotNumber": 49,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427259118,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:3:4  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427259118,
+      "shotNumber": 50,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427282530,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:3:27  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427282530,
+      "shotNumber": 51,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427282537,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:3:27  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427282537,
+      "shotNumber": 52,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427282546,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:3:27  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427282546,
+      "shotNumber": 53,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427282564,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:3:27  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427282564,
+      "shotNumber": 54,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427282570,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:3:27  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427282570,
+      "shotNumber": 55,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427282577,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:3:27  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427282577,
+      "shotNumber": 56,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427282587,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:3:28  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427282587,
+      "shotNumber": 57,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427282613,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:3:28  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427282613,
+      "shotNumber": 58,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427282621,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:3:28  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427282621,
+      "shotNumber": 59,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427282629,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:3:28  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427282629,
+      "shotNumber": 60,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427716595,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:10:42  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427716595,
+      "shotNumber": 61,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427716603,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:10:42  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427716603,
+      "shotNumber": 62,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427716616,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:10:42  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427716616,
+      "shotNumber": 63,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427716627,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:10:42  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427716627,
+      "shotNumber": 64,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427716634,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:10:42  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427716634,
+      "shotNumber": 65,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427716641,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:10:42  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427716641,
+      "shotNumber": 66,
+      "sessionId": "151"
+    },
+    {
+      "x": 20,
+      "y": 0,
+      "timestamp": 1760427746599,
+      "rawData": "Bullet Hit Coordinate (20, 0) at Time: 13:11:12  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427746599,
+      "shotNumber": 67,
+      "sessionId": "151"
+    },
+    {
+      "x": 20,
+      "y": 10,
+      "timestamp": 1760427746607,
+      "rawData": "Bullet Hit Coordinate (20, 10) at Time: 13:11:12  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427746607,
+      "shotNumber": 68,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427746613,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:11:12  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427746613,
+      "shotNumber": 69,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427746626,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:11:12  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427746626,
+      "shotNumber": 70,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "timestamp": 1760427746633,
+      "rawData": "Bullet Hit Coordinate (0, 0) at Time: 13:11:12  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427746633,
+      "shotNumber": 71,
+      "sessionId": "151"
+    },
+    {
+      "x": 0,
+      "y": 10,
+      "timestamp": 1760427746642,
+      "rawData": "Bullet Hit Coordinate (0, 10) at Time: 13:11:12  Date: 14/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760427746642,
+      "shotNumber": 72,
+      "sessionId": "151"
+    }
+  ],
+  "metadata": {
+    "firingMode": "ir-grid",
+    "sessionType": "practice",
+    "weaponType": "7.62mm-rifle-slr",
+    "targetType": "fig11-combat",
+    "targetDistance": 25,
+    "numberOfRounds": 10,
+    "startedAt": 1760427202006
+  }
+}

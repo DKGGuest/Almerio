@@ -2,6 +2,45 @@ import { useMemo, memo } from 'react';
 import { calculateRingRadii } from '../constants/shootingParameters';
 import { TARGET_TEMPLATES } from './TargetTemplateSelector';
 
+// Helper function to get target type background image
+const getTargetTypeBackgroundImage = (parameters, template) => {
+  console.log('🎯 TargetVisualization - getTargetTypeBackgroundImage debug:', {
+    parameters: parameters,
+    template: template,
+    targetType: parameters?.targetType,
+    target_type: parameters?.target_type
+  });
+
+  // First try to get image from template
+  if (template?.image) {
+    console.log('✅ Using template image:', template.image);
+    return `url('${import.meta.env.BASE_URL}${template.image}')`;
+  }
+
+  // Try both targetType and target_type (database field name)
+  const targetType = parameters?.targetType || parameters?.target_type;
+  if (!targetType) {
+    console.log('⚠️ No target type found in parameters');
+    return null;
+  }
+
+  // Map target type values to image filenames
+  const targetTypeImageMap = {
+    'fig11-combat': 'FIG 11 - Combat Target.webp',
+    'combat-120cm': '120 cm Combat Target.jpg',
+    'grouping-30cm': '30 cm Grouping Target.jpeg'
+  };
+
+  const imageFilename = targetTypeImageMap[targetType];
+  if (!imageFilename) {
+    console.log('⚠️ No image mapping found for target type:', targetType);
+    return null;
+  }
+
+  console.log('✅ Using target type image:', imageFilename);
+  return `url('${import.meta.env.BASE_URL}${imageFilename}')`;
+};
+
 // Optimized bullet component for static display - matches TargetDisplay.jsx styling
 const StaticBulletMark = memo(({ shot, containerSize = 320 }) => {
   // Safety check and convert string coordinates to numbers
@@ -51,7 +90,8 @@ const TargetVisualization = ({
   sessionParameters = null,
   template = null,
   containerSize = 320,
-  showTitle = true
+  showTitle = true,
+  uploadedImage = null
 }) => {
   // Determine template from parameters or use default
   const effectiveTemplate = useMemo(() => {
@@ -233,8 +273,11 @@ const TargetVisualization = ({
           position: 'relative',
           width: `${containerSize}px`,
           height: `${containerSize}px`,
-          // backgroundImage: `url('${import.meta.env.BASE_URL}target.svg')`,
-          backgroundSize: 'contain',
+          // Priority: 1) Uploaded image, 2) Target type image, 3) Default target
+          backgroundImage: uploadedImage ? `url('${uploadedImage}')` :
+                          getTargetTypeBackgroundImage(sessionParameters, effectiveTemplate) ||
+                          `url('${import.meta.env.BASE_URL}target.svg')`,
+          backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
           opacity: 0.90,

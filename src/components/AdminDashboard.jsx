@@ -318,6 +318,8 @@ const PerformanceAnalyticsTab = ({ analyticsData, activeLane, laneId = null, isM
   // Consider data available whenever we have any analyzed bullets or a finished session
   const hasData = !!(analyticsData && (analyticsData.showResults || analyticsData.shootingPhase === 'DONE'));
 
+
+
   // Calculate corrected accuracy using score-based method (same as Final Report)
   const getCorrectedAccuracy = () => {
     if (!analyticsData?.bullets || !activeLane) return 0;
@@ -1108,6 +1110,37 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
 
   // Handle adding hits with immediate UI update and async database save
   const handleAddHit = useCallback((hit) => {
+    console.log('🚨 handleAddHit CALLED:', {
+      hit: hit ? { x: hit.x, y: hit.y, isIrGrid: hit.isIrGrid, type: hit.type } : null,
+      timestamp: new Date().toISOString()
+    });
+
+    // Handle IR Grid batch update
+    if (hit && hit.type === 'IR_GRID_BATCH') {
+      console.log('🚨 HANDLING IR GRID BATCH UPDATE:', {
+        shotCount: hit.count,
+        shots: hit.shots.map(s => ({ x: s.x, y: s.y, score: s.score }))
+      });
+
+      const currentLane = lanes[activeLaneId];
+      const currentHits = currentLane?.hits || [];
+
+      // Add all IR Grid shots to hits array
+      const newHits = [...currentHits, ...hit.shots];
+
+      console.log('🚨 BATCH UPDATE - Adding all shots to lane:', {
+        previousHits: currentHits.length,
+        newShots: hit.shots.length,
+        totalHits: newHits.length
+      });
+
+      updateLane(activeLaneId, {
+        hits: newHits,
+        message: `🎯 ${hit.count} IR Grid Shots Added`
+      });
+      return;
+    }
+
     // Handle reset signal from TargetDisplay
     if (hit && hit.type === 'RESET') {
       updateLane(activeLaneId, {
@@ -1140,43 +1173,57 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
         coordinates: { x: hit.x, y: hit.y }
       });
     } else {
-      // Normal scoring: compute per-hit score using zone-based scoring system
+      // Define reference point for all scoring types
       const refPoint = lane?.bullseye ? lane.bullseye : { x: 200, y: 200 };
 
-      // CRITICAL FIX: Always wait for visualRingRadii before scoring shots
-      // This prevents scoring inconsistencies between live display and stored scores
-      let ringRadii;
-      if (analyticsData[activeLaneId]?.visualRingRadii) {
-        ringRadii = analyticsData[activeLaneId].visualRingRadii;
-        console.log('✅ AdminDashboard - Using visualRingRadii for scoring:', {
+      // Check if this is an IR Grid shot with pre-calculated score
+      if (hit.isIrGrid && typeof hit.score === 'number') {
+        // IR Grid shots already have their scores calculated in TargetDisplay
+        scoreForHit = hit.score;
+        console.log('✅ AdminDashboard - Using pre-calculated IR Grid score:', {
           shotCoords: `(${hit.x}, ${hit.y})`,
-          greenRadius: ringRadii.greenBullseyeRadius?.toFixed(1),
-          orangeRadius: ringRadii.orangeESARadius?.toFixed(1),
-          blueRadius: ringRadii.blueInnerRadius?.toFixed(1)
+          preCalculatedScore: scoreForHit,
+          isIrGrid: true
         });
       } else {
-        // CRITICAL: If visualRingRadii are not available, defer shot scoring
-        // This prevents incorrect scores from being saved to the database
-        console.warn('⚠️ AdminDashboard - visualRingRadii not available, deferring shot scoring:', {
-          shotCoords: `(${hit.x}, ${hit.y})`,
-          activeLaneId,
-          hasAnalyticsData: !!analyticsData[activeLaneId],
-          analyticsKeys: Object.keys(analyticsData[activeLaneId] || {})
-        });
+        // Normal scoring: compute per-hit score using zone-based scoring system
 
-        // Store the shot with a temporary score of 0 and mark it for re-scoring
-        // The TargetDisplay will trigger analytics update with visualRingRadii soon
-        scoreForHit = 0;
-        console.log('🔄 Shot will be re-scored when visualRingRadii become available');
+        // CRITICAL FIX: Always wait for visualRingRadii before scoring shots
+        // This prevents scoring inconsistencies between live display and stored scores
+        let ringRadii;
+        if (analyticsData[activeLaneId]?.visualRingRadii) {
+          ringRadii = analyticsData[activeLaneId].visualRingRadii;
+          console.log('✅ AdminDashboard - Using visualRingRadii for scoring:', {
+            shotCoords: `(${hit.x}, ${hit.y})`,
+            greenRadius: ringRadii.greenBullseyeRadius?.toFixed(1),
+            orangeRadius: ringRadii.orangeESARadius?.toFixed(1),
+            blueRadius: ringRadii.blueInnerRadius?.toFixed(1)
+          });
+        } else {
+          // CRITICAL: If visualRingRadii are not available, defer shot scoring
+          // This prevents incorrect scores from being saved to the database
+          console.warn('⚠️ AdminDashboard - visualRingRadii not available, deferring shot scoring:', {
+            shotCoords: `(${hit.x}, ${hit.y})`,
+            activeLaneId,
+            hasAnalyticsData: !!analyticsData[activeLaneId],
+            analyticsKeys: Object.keys(analyticsData[activeLaneId] || {})
+          });
 
-        // Skip the normal scoring logic and use the temporary score
-        const scoredHit = { ...hit, score: 0, needsRescoring: true };
-        const newHits = [...lane.hits, scoredHit];
-        updateLane(activeLaneId, { hits: newHits, message: '🎯 Hit Registered (Pending Score)' });
-        return; // Exit early to prevent saving incorrect score
+          // Store the shot with a temporary score of 0 and mark it for re-scoring
+          // The TargetDisplay will trigger analytics update with visualRingRadii soon
+          scoreForHit = 0;
+          console.log('🔄 Shot will be re-scored when visualRingRadii become available');
+
+          // Skip the normal scoring logic and use the temporary score
+          const scoredHit = { ...hit, score: 0, needsRescoring: true };
+          const currentLane = lanes[activeLaneId];
+          const newHits = [...(currentLane?.hits || []), scoredHit];
+          updateLane(activeLaneId, { hits: newHits, message: '🎯 Hit Registered (Pending Score)' });
+          return; // Exit early to prevent saving incorrect score
+        }
+
+        scoreForHit = calculateZoneScore(hit, refPoint, ringRadii);
       }
-
-      scoreForHit = calculateZoneScore(hit, refPoint, ringRadii);
 
       console.log('🎯 AdminDashboard - Shot scoring result:', {
         shotCoords: `(${hit.x}, ${hit.y})`,
@@ -1196,7 +1243,22 @@ const AdminDashboard = ({ onLogout, lanes, addLane, removeLane, updateLane }) =>
 
     const scoredHit = { ...hit, score: Number.isFinite(scoreForHit) ? scoreForHit : 0 };
 
-    const newHits = [...lane.hits, scoredHit];
+    // Get fresh lane state to prevent race conditions
+    const currentLane = lanes[activeLaneId];
+    const currentHits = currentLane?.hits || [];
+    const newHits = [...currentHits, scoredHit];
+
+    console.log('🎯 AdminDashboard - Adding hit to lane (DETAILED):', {
+      hitCoords: `(${hit.x}, ${hit.y})`,
+      score: scoreForHit,
+      isIrGrid: hit.isIrGrid,
+      previousHits: currentHits.length,
+      totalHits: newHits.length,
+      activeLaneId,
+      currentHitsData: currentHits.map(h => ({ x: h.x, y: h.y, isIrGrid: h.isIrGrid })),
+      newHitsData: newHits.map(h => ({ x: h.x, y: h.y, isIrGrid: h.isIrGrid })),
+      laneStateAtTime: currentLane ? { hitsCount: currentLane.hits?.length || 0 } : 'NO_LANE'
+    });
 
     // IMMEDIATE UI UPDATE - No blocking
     updateLane(activeLaneId, { hits: newHits, message: '🎯 Hit Registered' });

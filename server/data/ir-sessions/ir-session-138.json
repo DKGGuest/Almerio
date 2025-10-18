@@ -1,0 +1,27 @@
+{
+  "sessionId": "138",
+  "startTime": 1760014974952,
+  "isActive": true,
+  "firingMode": "ir-grid",
+  "shots": [
+    {
+      "x": 2,
+      "y": 1,
+      "timestamp": 1760014981697,
+      "rawData": "Bullet Hit Coordinate (2, 1) at Time: 18:31:45  Date: 9/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760014981697,
+      "shotNumber": 1,
+      "sessionId": "138"
+    }
+  ],
+  "metadata": {
+    "firingMode": "ir-grid",
+    "sessionType": "practice",
+    "weaponType": "7.62mm-rifle-slr",
+    "targetType": "fig11-combat",
+    "targetDistance": 25,
+    "numberOfRounds": 10,
+    "startedAt": 1760014974952
+  }
+}

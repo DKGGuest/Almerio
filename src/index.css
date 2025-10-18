@@ -5682,3 +5682,31 @@ body, .modern-bg {
   box-shadow: none !important;
   border-radius: 16px !important;
 }
+
+/* IR Grid Shot Animation */
+@keyframes irShotPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.6);
+  }
+  50% {
+    transform: scale(1.2);
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.6);
+  }
+}
+
+/* IR Shot Dot Styles */
+.ir-shot-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #ef4444;
+  border-radius: 50%;
+  border: 2px solid #dc2626;
+  cursor: pointer;
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.6);
+  animation: irShotPulse 0.5s ease-out;
+}

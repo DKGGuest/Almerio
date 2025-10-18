@@ -1,0 +1,147 @@
+{
+  "sessionId": "155",
+  "startTime": 1760600871554,
+  "isActive": true,
+  "firingMode": "ir-grid",
+  "shots": [
+    {
+      "x": 30,
+      "y": 10,
+      "timestamp": 1760600901843,
+      "rawData": "Bullet Hit Coordinate (30, 10) at Time: 13:17:8:946168  Date: 16/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760600901843,
+      "shotNumber": 1,
+      "sessionId": "155"
+    },
+    {
+      "x": 30,
+      "y": 10,
+      "timestamp": 1760600901850,
+      "rawData": "Bullet Hit Coordinate (30, 10) at Time: 13:17:8:66593  Date: 16/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760600901850,
+      "shotNumber": 2,
+      "sessionId": "155"
+    },
+    {
+      "x": 50,
+      "y": 10,
+      "timestamp": 1760600901866,
+      "rawData": "Bullet Hit Coordinate (50, 10) at Time: 13:17:8:96661  Date: 16/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760600901866,
+      "shotNumber": 3,
+      "sessionId": "155"
+    },
+    {
+      "x": 30,
+      "y": 10,
+      "timestamp": 1760600901871,
+      "rawData": "Bullet Hit Coordinate (30, 10) at Time: 13:17:8:191339  Date: 16/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760600901871,
+      "shotNumber": 4,
+      "sessionId": "155"
+    },
+    {
+      "x": 50,
+      "y": 10,
+      "timestamp": 1760600901890,
+      "rawData": "Bullet Hit Coordinate (50, 10) at Time: 13:17:8:246589  Date: 16/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760600901890,
+      "shotNumber": 5,
+      "sessionId": "155"
+    },
+    {
+      "x": 30,
+      "y": 10,
+      "timestamp": 1760600901928,
+      "rawData": "Bullet Hit Coordinate (30, 10) at Time: 13:17:8:362527  Date: 16/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760600901928,
+      "shotNumber": 6,
+      "sessionId": "155"
+    },
+    {
+      "x": 30,
+      "y": 10,
+      "timestamp": 1760600901936,
+      "rawData": "Bullet Hit Coordinate (30, 10) at Time: 13:17:8:399810  Date: 16/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760600901936,
+      "shotNumber": 7,
+      "sessionId": "155"
+    },
+    {
+      "x": 40,
+      "y": 10,
+      "timestamp": 1760600901950,
+      "rawData": "Bullet Hit Coordinate (40, 10) at Time: 13:17:8:435585  Date: 16/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760600901950,
+      "shotNumber": 8,
+      "sessionId": "155"
+    },
+    {
+      "x": 40,
+      "y": 10,
+      "timestamp": 1760600901956,
+      "rawData": "Bullet Hit Coordinate (40, 10) at Time: 13:17:8:502497  Date: 16/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760600901956,
+      "shotNumber": 9,
+      "sessionId": "155"
+    },
+    {
+      "x": 30,
+      "y": 10,
+      "timestamp": 1760600915842,
+      "rawData": "Bullet Hit Coordinate (30, 10) at Time: 13:17:22:522665  Date: 16/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760600915842,
+      "shotNumber": 10,
+      "sessionId": "155"
+    },
+    {
+      "x": 30,
+      "y": 10,
+      "timestamp": 1760600918881,
+      "rawData": "Bullet Hit Coordinate (30, 10) at Time: 13:17:25:437565  Date: 16/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760600918881,
+      "shotNumber": 11,
+      "sessionId": "155"
+    },
+    {
+      "x": 40,
+      "y": 10,
+      "timestamp": 1760600928343,
+      "rawData": "Bullet Hit Coordinate (40, 10) at Time: 13:17:34:582673  Date: 16/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760600928343,
+      "shotNumber": 12,
+      "sessionId": "155"
+    },
+    {
+      "x": 40,
+      "y": 10,
+      "timestamp": 1760600928351,
+      "rawData": "Bullet Hit Coordinate (40, 10) at Time: 13:17:35:676329  Date: 16/10/2025",
+      "source": "ESP32_Bluetooth",
+      "receivedAt": 1760600928351,
+      "shotNumber": 13,
+      "sessionId": "155"
+    }
+  ],
+  "metadata": {
+    "firingMode": "ir-grid",
+    "sessionType": "practice",
+    "weaponType": "7.62mm-rifle-slr",
+    "targetType": "fig11-combat",
+    "targetDistance": 25,
+    "numberOfRounds": 10,
+    "startedAt": 1760600871553
+  }
+}

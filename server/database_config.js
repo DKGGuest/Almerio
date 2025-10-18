@@ -358,8 +358,12 @@ async function createTables(db) {
 
     // Update existing ENUMs to new values (migration-safe)
     try {
-        await db.query("ALTER TABLE shooting_parameters MODIFY firing_mode ENUM('untimed','timed','snap','moving') NOT NULL DEFAULT 'untimed'");
-        console.log("✅ shooting_parameters.firing_mode enum updated to new values");
+        // First, update any invalid values to 'untimed'
+        await db.query("UPDATE shooting_parameters SET firing_mode = 'untimed' WHERE firing_mode NOT IN ('untimed','timed','snap','moving')");
+
+        // Then update the enum
+        await db.query("ALTER TABLE shooting_parameters MODIFY firing_mode ENUM('untimed','timed','snap','moving','ir-grid') NOT NULL DEFAULT 'untimed'");
+        console.log("✅ shooting_parameters.firing_mode enum updated to new values including IR grid");
 
         await db.query("ALTER TABLE shooting_parameters MODIFY session_type ENUM('grouping','zeroing','practice','test') DEFAULT 'practice'");
         console.log("✅ shooting_parameters.session_type enum updated to include grouping and zeroing");

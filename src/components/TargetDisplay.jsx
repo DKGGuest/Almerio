@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { TARGET_TEMPLATES } from './TargetTemplateSelector';
+import websocketClientService from '../services/websocketService';
 import {
   SESSION_TYPES,
   SESSION_TYPE_OPTIONS,
@@ -26,6 +27,23 @@ import {
   createTemplateFromDistance
 } from '../constants/shootingParameters';
 
+// Helper function to get target type background image
+const getTargetTypeBackgroundImage = (parameters) => {
+  // Try both targetType and target_type (database field name)
+  const targetType = parameters?.targetType || parameters?.target_type;
+  if (!targetType) return null;
+
+  // Map target type values to image filenames
+  const targetTypeImageMap = {
+    'fig11-combat': 'FIG 11 - Combat Target.webp',
+    'combat-120cm': '120 cm Combat Target.jpg',
+    'grouping-30cm': '30 cm Grouping Target.jpeg'
+  };
+
+  const imageFilename = targetTypeImageMap[targetType];
+  return imageFilename ? `url('${import.meta.env.BASE_URL}${imageFilename}')` : null;
+};
+
 // Highly optimized bullet component with custom comparison
 const BulletMark = memo(({ bullet, bullseyeId, onBulletClick }) => {
   // Safety check to prevent errors
@@ -51,9 +69,22 @@ const BulletMark = memo(({ bullet, bullseyeId, onBulletClick }) => {
       }}
     >
       <div
-        className="bullet-base"
+        className={(bullet.isIRShot || bullet.isIrGrid) ? "ir-shot-dot" : "bullet-base"}
         onClick={(e) => onBulletClick(e, bullet.id)}
-        title={`Bullet at (${bullet.x - 200}, ${200 - bullet.y})`}
+        title={(bullet.isIRShot || bullet.isIrGrid)
+          ? `IR Grid Shot at (${bullet.x - 200}, ${200 - bullet.y}) - Score: ${bullet.score || 'N/A'}`
+          : `Bullet at (${bullet.x - 200}, ${200 - bullet.y})`
+        }
+        style={(bullet.isIRShot || bullet.isIrGrid) ? {
+          width: '8px',
+          height: '8px',
+          backgroundColor: '#ef4444', // Red color for IR shots
+          borderRadius: '50%',
+          border: '2px solid #dc2626',
+          cursor: 'pointer',
+          boxShadow: '0 0 4px rgba(239, 68, 68, 0.6)',
+          animation: 'irShotPulse 0.5s ease-out'
+        } : {}}
       />
       {bullet.id === bullseyeId && (
         <div className="bullet-selection-overlay" />
@@ -1204,6 +1235,17 @@ const TargetDisplay = memo(({
   const lastTsRef = useRef(null);
   const movingDirRef = useRef(1);
 
+  // IR Grid mode state
+  const [irGridState, setIrGridState] = useState('IDLE'); // IDLE | ACTIVE | ENDED
+  const [irShots, setIrShots] = useState([]); // Store IR shots separately
+  const [irGridConnected, setIrGridConnected] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
+
+  // IR Grid string processing state
+  const [irGridInput, setIrGridInput] = useState('');
+  const [showIrGridInput, setShowIrGridInput] = useState(false);
+  const [processingIrString, setProcessingIrString] = useState(false);
+
   // Keep local parameters in sync with admin-provided parameters prop
   useEffect(() => {
     if (!parameters) return;
@@ -1380,13 +1422,14 @@ const TargetDisplay = memo(({
     console.log('[TargetDisplay] Reset watcher', { hitsLen: hits.length, bullseye, hasTemplate: !!template, hasImage: !!uploadedImage, shooter: !!shooter, localBullets: bullets.length, hasParameters: !!parameters });
     // Do not clear if we still have local bullets; tab switches may not pass hits immediately
     // CRITICAL FIX: Don't clear shooting parameters if we have valid parameters prop (even if template is temporarily null)
-    if (!hits.length && !bullseye && !template && !uploadedImage && !shooter && bullets.length === 0 && !parameters) {
-      console.log('[TargetDisplay] Clearing local state after full reset');
+    // PRESERVE uploaded image unless explicitly cleared by user
+    if (!hits.length && !bullseye && !template && !shooter && bullets.length === 0 && !parameters) {
+      console.log('[TargetDisplay] Clearing local state after full reset (preserving uploaded image)');
       setBullets([]);
       setBullseyeId(null);
       setShootingPhase('SELECT_BULLSEYE');
       setShowResults(false);
-      setUploadedImage(null);
+      // Don't clear uploaded image - let user explicitly clear it
       setIsCustomPositioning(false);
       setShootingParameters(null);
       setShowParameterForm(false);
@@ -1394,18 +1437,107 @@ const TargetDisplay = memo(({
     }
   }, [hits, bullseye, template, uploadedImage, shooter, bullets.length, parameters]);
 
+  // IR Grid WebSocket Integration
+  useEffect(() => {
+    console.log('🔍 WebSocket Effect - Checking firing mode:', {
+      shootingParameters,
+      firingMode: shootingParameters?.firingMode,
+      isIrGrid: shootingParameters?.firingMode === 'ir-grid'
+    });
+
+    // Only initialize WebSocket for IR grid mode
+    if (shootingParameters?.firingMode !== 'ir-grid') {
+      console.log('❌ Not IR Grid mode, skipping WebSocket connection');
+      return;
+    }
+
+    console.log('🎯 Initializing IR Grid WebSocket integration');
+
+    // Connect to WebSocket if not already connected
+    if (!websocketClientService.getConnectionStatus()) {
+      websocketClientService.connect();
+    }
+
+    // Subscribe to IR shot events
+    websocketClientService.subscribe(['irShots']);
+
+    // Set up event handlers
+    const handleIRShot = (shotData) => {
+      console.log('🎯 IR shot received:', shotData);
+
+      // Convert IR coordinates to target display coordinates
+      const convertedShot = convertIRCoordinatesToTarget(shotData);
+
+      // Add shot as red dot to bullets array
+      const irBullet = {
+        id: `ir-shot-${Date.now()}-${Math.random()}`,
+        x: convertedShot.x,
+        y: convertedShot.y,
+        timestamp: shotData.timestamp || Date.now(),
+        isIRShot: true,
+        rawIRData: shotData
+      };
+
+      setBullets(prev => [...prev, irBullet]);
+      setIrShots(prev => [...prev, shotData]);
+
+      // Emit to parent if callback provided
+      if (onAddHit) {
+        onAddHit(irBullet);
+      }
+    };
+
+    const handleIRGridStatus = (status, data) => {
+      console.log('🔌 IR Grid status:', status, data);
+      setIrGridConnected(status === 'connected');
+    };
+
+    const handleSessionShot = (sessionId, shotData) => {
+      // Only handle shots for our session
+      if (sessionId === sessionId) {
+        handleIRShot(shotData);
+      }
+    };
+
+    // Register event handlers
+    websocketClientService.on('irShot', handleIRShot);
+    websocketClientService.on('irGridStatus', handleIRGridStatus);
+    websocketClientService.on('sessionShot', handleSessionShot);
+
+    // Join session if we have session info
+    if (laneId && shooter) {
+      // Generate or get session ID
+      const currentSessionId = `${laneId}-${shooter}-${Date.now()}`;
+      setSessionId(currentSessionId);
+      websocketClientService.joinSession(currentSessionId, laneId);
+      setIrGridState('ACTIVE');
+    }
+
+    // Cleanup function
+    return () => {
+      websocketClientService.off('irShot', handleIRShot);
+      websocketClientService.off('irGridStatus', handleIRGridStatus);
+      websocketClientService.off('sessionShot', handleSessionShot);
+      websocketClientService.unsubscribe(['irShots']);
+
+      if (sessionId) {
+        websocketClientService.leaveSession();
+      }
+    };
+  }, [shootingParameters?.firingMode, laneId, shooter, sessionId, onAddHit]);
 
   // Sync local state with parent lane state after reset
   useEffect(() => {
     // Only perform a FULL reset when we explicitly get a RESET signal via onAddHit
     // or when everything is truly empty AND there are no local bullets.
     // CRITICAL FIX: Don't clear shooting parameters if we have valid parameters prop (even if template is temporarily null)
-    if (!hits.length && !bullseye && !template && !uploadedImage && !shooter && bullets.length === 0 && !parameters) {
+    // PRESERVE uploaded image unless explicitly cleared by user
+    if (!hits.length && !bullseye && !template && !shooter && bullets.length === 0 && !parameters) {
       setBullets([]);
       setBullseyeId(null);
       setShootingPhase('SELECT_BULLSEYE');
       setShowResults(false);
-      setUploadedImage(null);
+      // Don't clear uploaded image - let user explicitly clear it
       setIsCustomPositioning(false);
       setShootingParameters(null);
       setShowParameterForm(false);
@@ -1484,27 +1616,73 @@ const TargetDisplay = memo(({
   useEffect(() => {
     if (!hits) return;
 
-    // Convert hits to bullets format
+    // Debug: Focus on IR Grid hits
+    const irGridHits = hits.filter(h => h.isIrGrid);
+    console.log('🔄 TargetDisplay - Converting hits to bullets:', {
+      hitsLength: hits.length,
+      irGridHits: irGridHits.length,
+      allHits: hits.map(h => ({ x: h.x, y: h.y, isIrGrid: h.isIrGrid, score: h.score })),
+      irGridHitsData: irGridHits.map(h => ({ x: h.x, y: h.y, score: h.score }))
+    });
+
+    // Convert hits to bullets format, preserving all properties
     const convertedBullets = hits.map((hit, index) => ({
       id: hit.id || `hit-${index}-${hit.timestamp || Date.now()}`,
       x: hit.x,
       y: hit.y,
-      timestamp: hit.timestamp || Date.now()
+      timestamp: hit.timestamp || Date.now(),
+      score: hit.score, // Preserve score for analytics
+      isIrGrid: hit.isIrGrid, // Preserve IR Grid flag
+      shotNumber: hit.shotNumber, // Preserve shot number
+      timePhase: hit.timePhase, // Preserve time phase for timed mode
+      snapState: hit.snapState, // Preserve snap state for snap mode
+      isBullseye: hit.isBullseye // Preserve bullseye flag
     }));
 
     setBullets(prev => {
       // Preserve any existing bullseye bullet
       const existingBullseye = prev.find(b => b.isBullseye === true);
 
+      // CRITICAL FIX: Preserve directly added IR Grid bullets
+      const existingIrGridBullets = prev.filter(b => b.isIrGrid === true);
+
+      console.log('🔄 TargetDisplay - Setting bullets (PRESERVING IR GRID):', {
+        previousBullets: prev.length,
+        existingBullseye: !!existingBullseye,
+        existingIrGridBullets: existingIrGridBullets.length,
+        convertedBullets: convertedBullets.length,
+        hitsLength: hits.length
+      });
+
       if (hits.length === 0) {
-        // If no hits, keep only bullseye
-        return existingBullseye ? [existingBullseye] : [];
+        // If no hits, keep bullseye + existing IR Grid bullets
+        const result = [
+          ...(existingBullseye ? [existingBullseye] : []),
+          ...existingIrGridBullets
+        ];
+        console.log('🔄 TargetDisplay - No hits, keeping bullseye + IR Grid:', result.length);
+        return result;
       } else {
-        // Combine bullseye with new hits
-        return existingBullseye ? [existingBullseye, ...convertedBullets] : convertedBullets;
+        // Combine bullseye + existing IR Grid bullets + new hits (but avoid duplicates)
+        const newHitIds = new Set(convertedBullets.map(b => b.id));
+        const preservedIrGridBullets = existingIrGridBullets.filter(b => !newHitIds.has(b.id));
+
+        const result = [
+          ...(existingBullseye ? [existingBullseye] : []),
+          ...preservedIrGridBullets,
+          ...convertedBullets
+        ];
+
+        console.log('🔄 TargetDisplay - Combined result (PRESERVING IR GRID):', {
+          totalBullets: result.length,
+          bullseye: !!existingBullseye,
+          preservedIrGrid: preservedIrGridBullets.length,
+          newShots: convertedBullets.length
+        });
+        return result;
       }
     });
-  }, [hits?.length]); // Only depend on hits length to prevent infinite loops
+  }, [hits?.length, hits]); // Depend on hits array to capture score changes
 
   // Bullseye handling (timed vs normal)
   useEffect(() => {
@@ -1617,6 +1795,243 @@ const TargetDisplay = memo(({
   // Use ref to track last click timestamp to prevent duplicate clicks at same position
   const lastClickTime = useRef(0);
   const lastClickPosition = useRef({ x: 0, y: 0 });
+
+  /**
+   * Convert IR grid coordinates to target display coordinates
+   * @param {Object} irShotData - IR shot data with x, y coordinates
+   * @returns {Object} Converted coordinates for target display
+   */
+  const convertIRCoordinatesToTarget = useCallback((irShotData) => {
+    // IR grid coordinate system assumptions:
+    // - IR grid provides coordinates in its own coordinate system
+    // - Target display uses 400x400 coordinate space with (200,200) as center
+    // - Need to map IR coordinates to target display coordinates
+
+    const { x: irX, y: irY } = irShotData;
+
+    // For testing: assume input coordinates are in target coordinate system
+    // where center (0,0) maps to (200,200) in the 400x400 space
+    // This means:
+    // - Input (0,0) -> Target (200,200) - center
+    // - Input (-100,0) -> Target (100,200) - left of center
+    // - Input (100,0) -> Target (300,200) - right of center
+    // - Input (0,-100) -> Target (200,100) - above center
+    // - Input (0,100) -> Target (200,300) - below center
+
+    let targetDisplayX, targetDisplayY;
+
+    // Check if input coordinates seem to be in (0,0) centered system or (200,200) centered system
+    if (Math.abs(irX) <= 200 && Math.abs(irY) <= 200) {
+      // Likely (0,0) centered system - convert to (200,200) centered
+      targetDisplayX = irX + 200;
+      targetDisplayY = irY + 200;
+      console.log(`🔄 Converting from (0,0) centered: (${irX}, ${irY}) -> (${targetDisplayX}, ${targetDisplayY})`);
+    } else {
+      // Likely already in (200,200) centered system - use directly
+      targetDisplayX = irX;
+      targetDisplayY = irY;
+      console.log(`🔄 Using direct mapping: (${irX}, ${irY}) -> (${targetDisplayX}, ${targetDisplayY})`);
+    }
+
+    // Ensure coordinates are within target bounds (0-400)
+    const clampedX = Math.max(0, Math.min(400, targetDisplayX));
+    const clampedY = Math.max(0, Math.min(400, targetDisplayY));
+
+    console.log(`🎯 IR coordinate conversion: (${irX}, ${irY}) -> (${clampedX}, ${clampedY})`);
+
+    return {
+      x: clampedX,
+      y: clampedY,
+      originalIR: { x: irX, y: irY }
+    };
+  }, []);
+
+  // Process IR Grid coordinate string
+  const processIrGridString = useCallback(async (coordinateString) => {
+    if (!coordinateString || !coordinateString.trim()) {
+      alert('Please enter coordinate data');
+      return;
+    }
+
+    setProcessingIrString(true);
+    setIrGridState('ACTIVE');
+
+    try {
+      console.log('🔌 Processing IR Grid string:', coordinateString);
+
+      // Parse the coordinate string
+      // Expected format: "x1,y1,timestamp1\nx2,y2,timestamp2\n..." or "x1,y1\nx2,y2\n..."
+      const lines = coordinateString.trim().split('\n');
+      const shots = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        // Support multiple formats: "x,y,timestamp" or "x,y" or "x:y" etc.
+        const parts = line.split(/[,;:|]/).map(p => p.trim());
+
+        if (parts.length >= 2) {
+          const x = parseFloat(parts[0]);
+          const y = parseFloat(parts[1]);
+          const timestamp = parts.length >= 3 ? parseInt(parts[2]) : Date.now() + (i * 1000);
+
+          if (!isNaN(x) && !isNaN(y)) {
+            shots.push({ x, y, timestamp, shotNumber: i + 1 });
+          }
+        }
+      }
+
+      if (shots.length === 0) {
+        alert('No valid coordinates found in the input. Expected format: "x,y" or "x,y,timestamp" per line');
+        return;
+      }
+
+      console.log(`🎯 Parsed ${shots.length} shots from IR Grid string`);
+
+      // Process all shots first, then send them in batch
+      const processedShots = [];
+
+      // Get template and parameters once for all shots
+      const currentParams = shootingParameters || parameters;
+      let effectiveTemplate = template;
+
+      // If no template, try to create one from target distance
+      if (!effectiveTemplate && currentParams?.targetDistance) {
+        effectiveTemplate = createTemplateFromDistance(currentParams.targetDistance);
+        console.log(`🎯 Created template from distance ${currentParams.targetDistance}m:`, effectiveTemplate);
+      }
+
+      // Fallback to default template
+      if (!effectiveTemplate) {
+        effectiveTemplate = { diameter: 150 }; // 150mm = 50px radius fallback
+        console.log(`🎯 Using fallback template:`, effectiveTemplate);
+      }
+
+      const esaParameter = currentParams?.esa || null;
+      const ringRadii = calculateRingRadii(effectiveTemplate, esaParameter);
+      const bullseyePosition = { x: 200, y: 200 }; // Center bullseye in 400x400 coordinate space
+
+      // Process all shots
+      for (let i = 0; i < shots.length; i++) {
+        const shot = shots[i];
+
+        // Convert coordinates to target display
+        const targetCoords = convertIRCoordinatesToTarget({ x: shot.x, y: shot.y });
+        const hitObject = { x: targetCoords.x, y: targetCoords.y };
+
+        // Validate all parameters before calling calculateZoneScore
+        if (!hitObject || !bullseyePosition || !ringRadii) {
+          throw new Error(`Missing required parameters for scoring: hitObject=${!!hitObject}, bullseyePosition=${!!bullseyePosition}, ringRadii=${!!ringRadii}`);
+        }
+
+        const calculatedScore = calculateZoneScore(hitObject, bullseyePosition, ringRadii);
+
+        console.log(`🎯 IR Grid shot scoring:`, {
+          coordinates: `(${targetCoords.x.toFixed(1)}, ${targetCoords.y.toFixed(1)})`,
+          bullseye: `(${bullseyePosition.x}, ${bullseyePosition.y})`,
+          template: effectiveTemplate,
+          esaParameter: esaParameter,
+          targetDistance: currentParams?.targetDistance,
+          score: calculatedScore,
+          ringRadii: {
+            green: ringRadii.greenBullseyeRadius?.toFixed(1),
+            orange: ringRadii.orangeESARadius?.toFixed(1),
+            blue: ringRadii.blueInnerRadius?.toFixed(1)
+          }
+        });
+
+        // Create shot data for display
+        const shotData = {
+          x: targetCoords.x,
+          y: targetCoords.y,
+          originalX: shot.x,
+          originalY: shot.y,
+          timestamp: shot.timestamp,
+          shotNumber: shot.shotNumber,
+          isIrGrid: true,
+          score: calculatedScore
+        };
+
+        processedShots.push(shotData);
+        console.log(`🔴 IR Grid shot ${i + 1}/${shots.length}: (${shot.x}, ${shot.y}) -> (${targetCoords.x.toFixed(1)}, ${targetCoords.y.toFixed(1)})`);
+      }
+
+      // Add all shots to IR shots array at once
+      setIrShots(prev => [...prev, ...processedShots]);
+
+      // Add shots directly to bullets array for immediate display
+      setBullets(prev => {
+        const existingBullseye = prev.find(b => b.isBullseye === true);
+        const nonBullseyeBullets = prev.filter(b => !b.isBullseye);
+
+        // Convert processed shots to bullet format
+        const newBullets = processedShots.map((shotData, i) => ({
+          id: `ir-grid-${Date.now()}-${i}`,
+          x: shotData.x,
+          y: shotData.y,
+          timestamp: shotData.timestamp,
+          score: shotData.score,
+          isIrGrid: true,
+          shotNumber: shotData.shotNumber
+        }));
+
+        // Combine: bullseye + existing shots + new IR Grid shots
+        const result = existingBullseye
+          ? [existingBullseye, ...nonBullseyeBullets, ...newBullets]
+          : [...nonBullseyeBullets, ...newBullets];
+
+        console.log(`🎯 Added ${newBullets.length} IR Grid shots to display (total: ${result.length})`);
+        return result;
+      });
+
+      // Send batch update to parent to add all shots at once
+      if (onAddHit) {
+        const batchHit = {
+          type: 'IR_GRID_BATCH',
+          shots: processedShots.map(shotData => ({
+            x: shotData.x,
+            y: shotData.y,
+            score: shotData.score,
+            timestamp: shotData.timestamp,
+            isIrGrid: true,
+            shotNumber: shotData.shotNumber
+          })),
+          count: processedShots.length
+        };
+
+        console.log(`🎯 Sending ${processedShots.length} IR Grid shots to parent as batch`);
+        onAddHit(batchHit);
+      }
+
+
+
+      // Complete the session and show results
+      setIrGridState('ENDED');
+      setShowResults(true);
+      setShootingPhase('DONE');
+      console.log(`✅ IR Grid session completed with ${processedShots.length} shots`);
+
+      // Clear input
+      setIrGridInput('');
+      setShowIrGridInput(false);
+
+    } catch (error) {
+      console.error('❌ Error processing IR Grid string:', error);
+      console.error('❌ Error stack:', error.stack);
+      console.error('❌ Current state:', {
+        shootingParameters,
+        parameters,
+        template,
+        hasCalculateZoneScore: typeof calculateZoneScore === 'function',
+        hasCalculateRingRadii: typeof calculateRingRadii === 'function'
+      });
+      alert('Error processing coordinate data: ' + error.message);
+      setIrGridState('IDLE');
+    } finally {
+      setProcessingIrString(false);
+    }
+  }, [convertIRCoordinatesToTarget, onAddHit, shootingParameters, parameters, template]);
 
   const handleTargetClick = useCallback((e) => {
     if (!targetRef.current) return;
@@ -1878,7 +2293,26 @@ const TargetDisplay = memo(({
 
   // Memoize filtered bullets for performance
   const nonBullseyeBullets = useMemo(() => {
-    return bullets.filter(b => !b.isBullseye);
+    const filtered = bullets.filter(b => !b.isBullseye);
+
+    // Debug: Log when we have IR Grid bullets
+    const irGridBullets = filtered.filter(b => b.isIrGrid);
+    if (irGridBullets.length > 0) {
+      console.log('🔴 TargetDisplay - IR Grid bullets found:', {
+        totalBullets: bullets.length,
+        nonBullseyeBullets: filtered.length,
+        irGridBullets: irGridBullets.length,
+        irGridData: irGridBullets.map(b => ({
+          id: b.id,
+          x: b.x,
+          y: b.y,
+          isIrGrid: b.isIrGrid,
+          score: b.score
+        }))
+      });
+    }
+
+    return filtered;
   }, [bullets]);
 
   const calculateDistance = (point1, point2) => {
@@ -2135,6 +2569,9 @@ const TargetDisplay = memo(({
       const bullseyeBullet = bullets.find(b => b.isBullseye);
       const referenceCoords = bullseyeBullet ? { x: bullseyeBullet.x, y: bullseyeBullet.y } : { x: 200, y: 200 };
       const bullseyeCoords = bullseyeBullet ? { x: bullseyeBullet.x, y: bullseyeBullet.y } : null;
+      const nonBullseyeBullets = bullets.filter(b => !b.isBullseye);
+
+
 
       onAnalyticsUpdate({
         stats: {
@@ -2143,7 +2580,7 @@ const TargetDisplay = memo(({
         },
         shootingPhase,
         showResults,
-        bullets: bullets.filter(b => !b.isBullseye),
+        bullets: nonBullseyeBullets,
         bullseye: bullseyeCoords,
         bullseyeId,
         accuracyRating,
@@ -2267,6 +2704,23 @@ const TargetDisplay = memo(({
               <span>📊</span>
               <span>{bullets.filter(b => !b.isBullseye && (b.includeInStats !== false)).length} shots</span>
             </div>
+
+            {/* IR Grid Status Indicator */}
+            {shootingParameters?.firingMode === 'ir-grid' && (
+              <div style={{
+                background: irGridConnected ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                padding: '4px 8px',
+                borderRadius: '12px',
+                fontSize: 12,
+                fontWeight: 600,
+                color: irGridConnected ? 'rgba(34, 197, 94, 1)' : 'rgba(239, 68, 68, 1)',
+                textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                letterSpacing: '0.3px',
+                border: `1px solid ${irGridConnected ? 'rgba(34, 197, 94, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`
+              }}>
+                🔌 IR Grid {irGridConnected ? 'Connected' : 'Disconnected'}
+              </div>
+            )}
           </div>
         </div>
 
@@ -2483,12 +2937,12 @@ const TargetDisplay = memo(({
             setCursorPos(null);
           }, [])}
           style={{
-            // Show background target image with concentric rings BEFORE parameters are set
-            // After parameters are chosen, remove background to show only colored rings
-            backgroundImage: (shootingParameters || parameters) ? 'none' :
-                           (uploadedImage ? `url('${uploadedImage}')` : `url('${import.meta.env.BASE_URL}target.svg')`),
-            backgroundColor: (shootingParameters || parameters) ? '#f0f0f0' : 'transparent',
-            backgroundSize: 'contain',
+            // Priority: 1) Uploaded image, 2) Target type image, 3) Default target
+            backgroundImage: uploadedImage ? `url('${uploadedImage}')` :
+                           getTargetTypeBackgroundImage(shootingParameters || parameters) ||
+                           `url('${import.meta.env.BASE_URL}target.svg')`,
+            backgroundColor: !uploadedImage && !getTargetTypeBackgroundImage(shootingParameters || parameters) && (shootingParameters || parameters) ? '#f0f0f0' : 'transparent',
+            backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
             opacity: 0.90, // Increased opacity for better target visibility while maintaining colored ring prominence
@@ -2852,16 +3306,27 @@ const TargetDisplay = memo(({
           )}
 
           {/* Bullet Marks - optimized rendering with memoized components */}
-          {nonBullseyeBullets && Array.isArray(nonBullseyeBullets) && nonBullseyeBullets.map((bullet) => (
-            bullet && bullet.id ? (
+          {nonBullseyeBullets && Array.isArray(nonBullseyeBullets) && nonBullseyeBullets.map((bullet) => {
+            // Debug: Log each bullet being rendered
+            if (bullet && bullet.isIrGrid) {
+              console.log(`🔴 RENDERING IR Grid bullet:`, {
+                id: bullet.id,
+                x: bullet.x,
+                y: bullet.y,
+                isIrGrid: bullet.isIrGrid,
+                score: bullet.score
+              });
+            }
+
+            return bullet && bullet.id ? (
               <BulletMark
                 key={bullet.id}
                 bullet={bullet}
                 bullseyeId={bullseyeId}
                 onBulletClick={handleBulletClick}
               />
-            ) : null
-          ))}
+            ) : null;
+          })}
           {/* Green bullseye center marker removed - keeping only the ring borders */}
         </div>
       </div>
@@ -2991,9 +3456,10 @@ const TargetDisplay = memo(({
 
 
 
-        {/* Done Firing (Untimed and Jumper modes) */}
+        {/* Done Firing (Untimed, Jumper, and IR Grid modes) */}
         {(((shootingParameters?.firingMode || parameters?.firingMode) === 'jumper') ||
-          ((shootingParameters?.firingMode || parameters?.firingMode) === 'untimed')) &&
+          ((shootingParameters?.firingMode || parameters?.firingMode) === 'untimed') ||
+          ((shootingParameters?.firingMode || parameters?.firingMode) === 'ir-grid')) &&
          shootingPhase === 'SHOOTING' && nonBullseyeBullets.length > 0 && (
           <button
             onClick={() => { setShowResults(true); setShootingPhase('DONE'); }}
@@ -3084,7 +3550,7 @@ const TargetDisplay = memo(({
               setBullseyeId(null);
               setShootingPhase('SELECT_BULLSEYE');
               setShowResults(false);
-              setUploadedImage(null);
+              // Preserve uploaded image - user can clear it separately if needed
               setShootingParameters(null); // Reset parameters on reset
               setShowParameterForm(false);
               setShowParameterView(false);
@@ -3149,6 +3615,31 @@ const TargetDisplay = memo(({
               });
               setBullseyeId('bullseye-center');
               cancelAnimationFrame(movingAnimRef.current || 0);
+            } else if (params?.firingMode === 'ir-grid') {
+              // Initialize IR Grid mode
+              setTimedState('IDLE');
+              setCountdownSec(0);
+              setWindowSecLeft(0);
+              setMovingState('IDLE');
+              setMovingCountdownSec(0);
+              setIrGridState('IDLE');
+              setIrShots([]);
+              setShowResults(false);
+              setShootingPhase('SHOOTING');
+              // Ensure green bullseye exists for analytics calculation
+              setBullets(prev => {
+                const hasBull = prev.some(b => b.isBullseye);
+                if (hasBull) return prev;
+                return [{ id: 'bullseye-center', x: 200, y: 200, timestamp: Date.now(), isBullseye: true }, ...prev];
+              });
+              setBullseyeId('bullseye-center');
+              // Set bullseye for analytics
+              if (onBullseyeSet) {
+                onBullseyeSet({ x: 200, y: 200 });
+              }
+              setShowIrGridInput(true); // Show IR Grid input form
+              cancelAnimationFrame(movingAnimRef.current || 0);
+              console.log('🔌 IR Grid mode initialized');
             } else {
               // Reset timed/moving state when not in those modes
               setTimedState('IDLE');
@@ -3156,6 +3647,8 @@ const TargetDisplay = memo(({
               setWindowSecLeft(0);
               setMovingState('IDLE');
               setMovingCountdownSec(0);
+              setIrGridState('IDLE');
+              setShowIrGridInput(false);
               cancelAnimationFrame(movingAnimRef.current || 0);
             }
 
@@ -3166,6 +3659,106 @@ const TargetDisplay = memo(({
           }}
           onCancel={() => setShowParameterForm(false)}
         />
+      )}
+
+      {/* IR Grid Input Form */}
+      {showIrGridInput && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '24px',
+            maxWidth: '600px',
+            width: '90%',
+            maxHeight: '80vh',
+            overflow: 'auto'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
+              <span style={{ fontSize: '24px', marginRight: '12px' }}>🔌</span>
+              <h2 style={{ margin: 0, color: '#1f2937', fontSize: '20px', fontWeight: 'bold' }}>
+                IR Grid Coordinate Input
+              </h2>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <p style={{ color: '#6b7280', fontSize: '14px', margin: '0 0 12px 0' }}>
+                Enter coordinate data from your IR Grid system. Each line should contain X,Y coordinates and optionally a timestamp.
+              </p>
+              <p style={{ color: '#6b7280', fontSize: '12px', margin: '0 0 16px 0' }}>
+                <strong>Format examples:</strong><br/>
+                • <code>150,200</code> (X,Y coordinates)<br/>
+                • <code>150,200,1634567890</code> (X,Y,timestamp)<br/>
+                • <code>150:200</code> (colon separator)<br/>
+                • Multiple shots on separate lines
+              </p>
+            </div>
+
+            <textarea
+              value={irGridInput}
+              onChange={(e) => setIrGridInput(e.target.value)}
+              placeholder="Enter coordinate data here...&#10;Example:&#10;150,200&#10;180,220&#10;200,200"
+              style={{
+                width: '100%',
+                height: '200px',
+                padding: '12px',
+                border: '2px solid #e5e7eb',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontFamily: 'monospace',
+                resize: 'vertical',
+                marginBottom: '20px'
+              }}
+            />
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowIrGridInput(false);
+                  setIrGridInput('');
+                }}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#6b7280',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => processIrGridString(irGridInput)}
+                disabled={processingIrString || !irGridInput.trim()}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: processingIrString || !irGridInput.trim() ? '#9ca3af' : '#dc2626',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: processingIrString || !irGridInput.trim() ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {processingIrString ? '🔄 Processing...' : '🎯 Process Shots'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Parameter Viewer Modal */}

@@ -429,7 +429,22 @@ const ShooterProfilePage = () => {
                     ⏰ {new Date(session.started_at).toLocaleTimeString()}
                   </div>
                   <div style={{ fontSize: '14px', color: '#374151', marginBottom: '8px' }}>
-                    <span style={{ fontWeight: '600' }}>🎯 {getFiringModeDisplay(session.firing_mode)}</span> •
+                    <span style={{ fontWeight: '600' }}>
+                      {session.firing_mode === 'ir-grid' ? '🔌' : '🎯'} {getFiringModeDisplay(session.firing_mode)}
+                      {session.firing_mode === 'ir-grid' && (
+                        <span style={{
+                          backgroundColor: '#ef4444',
+                          color: 'white',
+                          fontSize: '10px',
+                          padding: '2px 6px',
+                          borderRadius: '8px',
+                          fontWeight: 'bold',
+                          marginLeft: '6px'
+                        }}>
+                          IR GRID
+                        </span>
+                      )}
+                    </span> •
                     <span style={{ fontWeight: 'bold', color: '#10b981', marginLeft: '4px' }}>
                       {Number(session.accuracy_percentage || 0).toFixed(1)}%
                     </span>
